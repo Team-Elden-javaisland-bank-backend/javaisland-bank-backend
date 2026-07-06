@@ -1,32 +1,24 @@
-server:
-  port: 8080
-
 spring:
+  application:
+    name: bank-backend
+
+  # 💾 CONFIGURAZIONE DEL DATABASE POSTGRESQL
   datasource:
-    url: jdbc:postgresql://localhost:5432/real_bank_db
-    username: tuo_utente_postgres
-    password: tua_password_postgres
+    url: jdbc:postgresql://localhost:5432/javaisland_bank
+    username: postgres
+    password: postgres
     driver-class-name: org.postgresql.Driver
 
+  # 🛠️ CONFIGURAZIONE HIBERNATE / JPA
   jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
         format_sql: true
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          # Sostituisci 'real-bank-realm' col nome del Realm creato su Keycloak
-          issuer-uri: http://localhost:8080/realms/real-bank-realm
-          jwk-set-uri: http://localhost:8080/realms/real-bank-realm/protocol/openid-connect/certs
-
-# Configurazione Swagger
-springdoc:
-  api-docs:
-    path: /v3/api-docs
-  swagger-ui:
-    path: /swagger-ui.html
+# 🔌 CONFIGURAZIONE DELLA PORTA DEL SERVER TOMCAT
+server:
+  port: 8080
