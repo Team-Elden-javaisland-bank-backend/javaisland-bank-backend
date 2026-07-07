@@ -1,33 +1,35 @@
+server:
+  port: 8081
+
 spring:
   application:
     name: bank-backend
 
-  # 💾 CONFIGURAZIONE DEL DATABASE POSTGRESQL
   datasource:
-    url: jdbc:postgresql://localhost:5432/javaisland_bank
-    username: postgres
-    password: postgres
+    url: jdbc:postgresql://localhost:5432/javaisland_backend
+    username: bank_admin
+    password: bank_password
     driver-class-name: org.postgresql.Driver
 
-  # 🛠️ CONFIGURAZIONE HIBERNATE / JPA
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      # 🔄 Svuota e ricrea le tabelle per evitare l'errore dei dati nulli vecchi
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
         format_sql: true
 
-  # 🔐 CONFIGURAZIONE SICUREZZA OAUTH2 / KEYCLOAK
   security:
     oauth2:
       resourceserver:
         jwt:
-          # Inseriamo l'URL del tuo Keycloak locale (modifica la porta o il realm se differiscono)
           issuer-uri: http://localhost:8080/realms/javaisland-realm
+          jwk-set-uri: http://localhost:8080/realms/javaisland-realm/protocol/openid-connect/certs
 
-# 🔌 CONFIGURAZIONE DELLA PORTA DEL BACKEND TOMCAT
-server:
-  port: 8081
+springdoc:
+  api-docs:
+    path: /api/v3/api-docs
+  swagger-ui:
+    path: /api/swagger-ui.html
+  override-with-generic-response: false

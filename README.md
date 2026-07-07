@@ -51,3 +51,26 @@ Se devi aggiungere una nuova funzionalità o modificare il codice esistente, seg
     @Enumerated(EnumType.STRING)
     ```
 3.  **Non toccare la branch develop direttamente**: Crea sempre una branch di feature (es. `feature-nome-funzione`) partendo da `develop`, lavora lì e poi apri una Pull Request per la revisione.
+
+📝 Registro delle Modifiche:
+Allineamento Sicurezza e Test API
+1. Correzione Configurazione Keycloak (application.yml)
+   🔍 Problema: L'applicazione lanciava un errore 401 Unauthorized su Swagger nonostante il token JWT inviato fosse formalmente corretto.
+
+💡 Causa: Le proprietà issuer-uri e jwk-set-uri puntavano al realm errato (real-bank-realm), non allineato con il realm effettivo configurato su Keycloak (javaisland-realm).
+
+🛠️ Soluzione: Aggiornati gli URL nel file application.yml per puntare al realm corretto. La SecurityConfig è stata mantenuta intatta poiché le regole di autorizzazione generali erano già corrette; il problema risiedeva esclusivamente nell'endpoint di validazione dell'emettitore del token.
+
+2. Validazione Dati e Vincoli DB su Registro Utenti (POST /api/users/register)
+   🔍 Problema: Durante i test di registrazione si verificava un errore 500 Internal Server Error.
+
+💡 Causa: Il payload di esempio ometteva il campo keycloakId. Nel database PostgreSQL, la colonna keycloak_id della tabella users possiede un vincolo di integrità NOT NULL.
+
+🛠️ Soluzione: Il payload della richiesta è stato corretto includendo una stringa identificativa univoca per il keycloakId. Per i test locali è sufficiente valorizzarlo con un ID fittizio per soddisfare il vincolo del database.
+
+3. Gestione Scadenza Sessioni (Token TTL)
+   🔍 Problema: Ricorrenza di errori 401 Unauthorized con messaggio Jwt expired dopo periodi di inattività.
+
+💡 Causa: I token di accesso emessi da Keycloak hanno una durata di validità predefinita di 5 minuti per ragioni di sicurezza.
+
+🛠️ Soluzione: Non sono state necessarie modifiche al codice. La procedura corretta prevede semplicemente di effettuare il logout e una nuova autenticazione tramite il pulsante Authorize su Swagger per rigenerare un token valido.
