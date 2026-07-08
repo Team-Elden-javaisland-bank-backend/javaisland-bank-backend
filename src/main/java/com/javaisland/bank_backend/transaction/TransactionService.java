@@ -50,7 +50,7 @@ public class TransactionService {
                 throw new ApiBankException("Account " + source.getAccountNumber() + " is not active.", "INVALID_ACCOUNT_STATE");
             }
             if (source.getBalance().compareTo(amount) < 0) {
-                throw new ApiBankException("Disponibilita' terminata sul conto " + source.getAccountNumber(), "INSUFFICIENT_FUNDS");
+                throw new ApiBankException("Insufficient funds on account " + source.getAccountNumber(), "INSUFFICIENT_FUNDS");
             }
             source.setBalance(source.getBalance().subtract(amount));
             accountRepository.save(source);
@@ -86,20 +86,23 @@ public class TransactionService {
     }
 
     @Transactional
-    public void deposit(TransactionRequestDto request) {
+    public void deposit(String keycloakId, TransactionRequestDto request) {
         Account account = getAccountOrThrow(request.getAccountNumber());
+        assertOwnership(keycloakId, account);
         transferFunds(null, account, request.getAmount(), TransactionType.DEPOSIT, "Deposit");
     }
 
     @Transactional
-    public void withdraw(TransactionRequestDto request) {
+    public void withdraw(String keycloakId, TransactionRequestDto request) {
         Account account = getAccountOrThrow(request.getAccountNumber());
+        assertOwnership(keycloakId, account);
         transferFunds(account, null, request.getAmount(), TransactionType.WITHDRAWAL, "Withdrawal");
     }
 
     @Transactional(readOnly = true)
-    public List<TransactionResponseDto> getLast10Transactions(String accountNumber) {
+    public List<TransactionResponseDto> getLast10Transactions(String keycloakId, String accountNumber) {
         Account account = getAccountOrThrow(accountNumber);
+        assertOwnership(keycloakId, account);
         Pageable last10 = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
         return transactionRepository
                 .findBySourceAccount_IdOrDestinationAccount_IdOrderByCreatedAtDesc(account.getId(), account.getId(), last10)
@@ -136,6 +139,14 @@ public class TransactionService {
         Page<Transaction> result = transactionRepository.findAll(spec, pageable);
 
         return PageResponseDto.from(result.map(this::mapToResponseDto));
+    }
+
+    private void assertOwnership(String keycloakId, Account account) {
+        User user = userRepository.findByKeycloakId(keycloakId)
+                .orElseThrow(() -> new ApiBankException("User not found.", "USER_NOT_FOUND"));
+        if (!account.getUser().getId().equals(user.getId())) {
+            throw new ApiBankException("Account " + account.getAccountNumber() + " does not belong to the current user.", "FORBIDDEN");
+        }
     }
 
     private Account getAccountOrThrow(String accountNumber) {

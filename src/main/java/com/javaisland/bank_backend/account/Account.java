@@ -2,13 +2,16 @@ package com.javaisland.bank_backend.account;
 
 import com.javaisland.bank_backend.user.User;
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "accounts")
-@Data
+@Getter
+@Setter
 public class Account {
 
     @Id
@@ -21,9 +24,6 @@ public class Account {
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal balance = BigDecimal.ZERO;
 
-    /**
-     * FK to account_statuses.id. See {@link AccountStatus} for the known values.
-     */
     @Column(name = "status_id", nullable = false)
     private Integer statusId;
 
@@ -31,12 +31,13 @@ public class Account {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @CreationTimestamp
     @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt;
 
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
     @Version
-    private Long version; // optimistic locking: protects balance updates from lost updates under concurrency
+    private Long version;
 }

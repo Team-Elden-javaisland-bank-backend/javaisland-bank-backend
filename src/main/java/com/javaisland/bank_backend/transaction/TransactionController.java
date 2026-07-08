@@ -22,20 +22,23 @@ public class TransactionController {
     private final TransactionService transactionService;
 
     @PostMapping("/deposit")
-    public ResponseEntity<String> deposit(@Valid @RequestBody TransactionRequestDto request) {
-        transactionService.deposit(request);
+    public ResponseEntity<String> deposit(@AuthenticationPrincipal Jwt jwt,
+                                          @Valid @RequestBody TransactionRequestDto request) {
+        transactionService.deposit(jwt.getSubject(), request);
         return ResponseEntity.ok("Deposit completed.");
     }
 
     @PostMapping("/withdraw")
-    public ResponseEntity<String> withdraw(@Valid @RequestBody TransactionRequestDto request) {
-        transactionService.withdraw(request);
+    public ResponseEntity<String> withdraw(@AuthenticationPrincipal Jwt jwt,
+                                           @Valid @RequestBody TransactionRequestDto request) {
+        transactionService.withdraw(jwt.getSubject(), request);
         return ResponseEntity.ok("Withdrawal completed.");
     }
 
     @GetMapping("/recent/{accountNumber}")
-    public ResponseEntity<List<TransactionResponseDto>> getLast10(@PathVariable String accountNumber) {
-        return ResponseEntity.ok(transactionService.getLast10Transactions(accountNumber));
+    public ResponseEntity<List<TransactionResponseDto>> getLast10(@AuthenticationPrincipal Jwt jwt,
+                                                                   @PathVariable String accountNumber) {
+        return ResponseEntity.ok(transactionService.getLast10Transactions(jwt.getSubject(), accountNumber));
     }
 
     @GetMapping("/all")

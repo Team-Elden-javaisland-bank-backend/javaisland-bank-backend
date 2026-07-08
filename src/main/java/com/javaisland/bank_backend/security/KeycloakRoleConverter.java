@@ -18,6 +18,7 @@ public class KeycloakRoleConverter implements Converter<Jwt, Collection<GrantedA
             return Set.of();
         }
 
+        @SuppressWarnings("unchecked")
         Collection<String> roles = (Collection<String>) realmAccess.get("roles");
         return roles.stream()
                 .map(roleName -> new SimpleGrantedAuthority("ROLE_" + roleName.toUpperCase()))
