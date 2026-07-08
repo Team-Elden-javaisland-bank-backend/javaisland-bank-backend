@@ -2,6 +2,7 @@ package com.javaisland.bank_backend.request;
 
 import com.javaisland.bank_backend.card.Card;
 import com.javaisland.bank_backend.card.CardRepository;
+import com.javaisland.bank_backend.card.CardStatusRepository;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,13 +16,16 @@ public class RequestService {
     private final BankRequestRepository bankRequestRepository;
     private final LoanRepository loanRepository;
     private final CardRepository cardRepository;
+    private final CardStatusRepository cardStatusRepository;
 
     public RequestService(BankRequestRepository bankRequestRepository,
                           LoanRepository loanRepository,
-                          CardRepository cardRepository) {
+                          CardRepository cardRepository,
+                          CardStatusRepository cardStatusRepository) {
         this.bankRequestRepository = bankRequestRepository;
         this.loanRepository = loanRepository;
         this.cardRepository = cardRepository;
+        this.cardStatusRepository = cardStatusRepository;
     }
 
     @Transactional
@@ -135,7 +139,9 @@ public class RequestService {
             Card card = cardRepository.findById(cardId)
                     .orElseThrow(() -> new ApiBankException("Carta non trovata per il blocco automatico"));
 
-            card.setStatus(com.javaisland.bank_backend.card.CardStatus.BLOCKED);
+            var blockedStatus = cardStatusRepository.findByStatusName("BLOCKED")
+                    .orElseThrow(() -> new ApiBankException("Stato carta BLOCKED non configurato."));
+            card.setStatus(blockedStatus);
             cardRepository.save(card);
         }
     }

@@ -1,15 +1,15 @@
-package com.javaisland.bank_backend.user;
+package com.javaisland.bank_backend.transaction;
 
 import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "user_statuses")
+@Table(name = "transaction_statuses")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserStatus {
+public class TransactionStatus {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

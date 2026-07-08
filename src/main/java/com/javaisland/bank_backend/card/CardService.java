@@ -1,5 +1,7 @@
 package com.javaisland.bank_backend.card;
 
+import com.javaisland.bank_backend.card.CardStatusRepository;
+import com.javaisland.bank_backend.card.CardTypeRepository;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
@@ -9,27 +11,33 @@ import java.util.Random;
 public class CardService {
 
     private final CardRepository cardRepository;
+    private final CardStatusRepository cardStatusRepository;
+    private final CardTypeRepository cardTypeRepository;
     private final Random random = new Random();
 
-    public CardService(CardRepository cardRepository) {
+    public CardService(CardRepository cardRepository,
+                       CardStatusRepository cardStatusRepository,
+                       CardTypeRepository cardTypeRepository) {
         this.cardRepository = cardRepository;
+        this.cardStatusRepository = cardStatusRepository;
+        this.cardTypeRepository = cardTypeRepository;
     }
 
-    // 🧠 LOGICA PER GENERARE UNA NUOVA CARTA (Usa il DTO)
     public Card issueNewCard(CardIssueDTO dto) {
-        // 📌 CONTROLLO EDGE CASE: Il nome del titolare deve contenere solo lettere e spazi
         if (!dto.getHolderName().matches("^[a-zA-Z\\s]+$")) {
             throw new ApiBankException("Il nome del titolare può contenere solo lettere e spazi.");
         }
 
+        var cardType = cardTypeRepository.findByTypeName(dto.getCardType())
+                .orElseThrow(() -> new ApiBankException("Tipo carta '" + dto.getCardType() + "' non valido."));
+        var inactiveStatus = cardStatusRepository.findByStatusName("INACTIVE")
+                .orElseThrow(() -> new ApiBankException("Stato carta INACTIVE non configurato."));
+
         Card card = new Card();
         card.setAccountId(dto.getAccountId());
         card.setHolderName(dto.getHolderName());
-        card.setCardType(dto.getCardType());
-
-        // Impostiamo lo stato iniziale usando l'Enum
-        card.setStatus(CardStatus.INACTIVE);
-
+        card.setCardType(cardType);
+        card.setStatus(inactiveStatus);
         card.setExpirationDate(LocalDate.now().plusYears(5));
         card.setCvv(String.format("%03d", random.nextInt(1000)));
         card.setCardNumber(generateUniqueCardNumber());
@@ -37,15 +45,19 @@ public class CardService {
         return cardRepository.save(card);
     }
 
-    // 🧠 ATTIVAZIONE O BLOCCO DELLA CARTA (Usa CardStatus Enum)
-    public Card updateCardStatus(Long cardId, CardStatus newStatus) {
+    public Card updateCardStatus(Long cardId, String newStatusName) {
         Card card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new ApiBankException("Carta non trovata con questo ID."));
 
-        // Se la carta è bloccata in modo definitivo, blocca la modifica
-        if (card.getStatus() == CardStatus.BLOCKED) {
+        var blockedStatus = cardStatusRepository.findByStatusName("BLOCKED")
+                .orElseThrow(() -> new ApiBankException("Stato carta BLOCKED non configurato."));
+
+        if (card.getStatus().getId().equals(blockedStatus.getId())) {
             throw new ApiBankException("Impossibile modificare lo stato: la carta è BLOCCATA definitivamente.");
         }
+
+        var newStatus = cardStatusRepository.findByStatusName(newStatusName)
+                .orElseThrow(() -> new ApiBankException("Stato carta '" + newStatusName + "' non valido."));
 
         card.setStatus(newStatus);
         return cardRepository.save(card);

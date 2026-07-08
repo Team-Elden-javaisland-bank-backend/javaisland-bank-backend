@@ -1,15 +1,15 @@
-package com.javaisland.bank_backend.card;
+package com.javaisland.bank_backend.transaction;
 
 import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "card_types")
+@Table(name = "transaction_types")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class CardType {
+public class TransactionType {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -24,12 +24,11 @@ public class CardController {
         return new ResponseEntity<>(newCard, HttpStatus.CREATED);
     }
 
-    // 🧠 ENDPOINT PER CAMBIARE STATO (Solo Dipendenti)
     @PatchMapping("/{cardId}/status")
-    @PreAuthorize("hasRole('EMPLOYEE')") // 📌 Blocca l'accesso se non si è EMPLOYEE
+    @PreAuthorize("hasRole('EMPLOYEE')")
     public ResponseEntity<Card> updateStatus(
             @PathVariable Long cardId,
-            @RequestParam CardStatus status) {
+            @RequestParam String status) {
 
         Card updatedCard = cardService.updateCardStatus(cardId, status);
         return ResponseEntity.ok(updatedCard);

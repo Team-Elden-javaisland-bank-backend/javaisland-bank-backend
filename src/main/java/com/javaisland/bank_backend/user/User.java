@@ -1,11 +1,13 @@
 package com.javaisland.bank_backend.user;
 
+import com.javaisland.bank_backend.user.RoleType;
+import com.javaisland.bank_backend.user.UserStatus;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId; // 📌 Aggiunto import per la Time Zone
+import java.time.ZoneId;
 
 @Entity
 @Table(name = "users")
@@ -53,15 +55,14 @@ public class User {
     @Column(name = "branch_code", length = 20)
     private String branchCode;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status_name", nullable = false, length = 30)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "status_id", nullable = false)
     private UserStatus status;
 
-    @NotNull(message = "Il codice ruolo è obbligatorio")
-    @Column(name = "role_type_id", nullable = false)
-    private Integer roleTypeId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "role_type_id", nullable = false)
+    private RoleType roleType;
 
     @Column(name = "created_at")
-    // 📌 Modificato specificando esplicitamente il fuso orario Europeo/Roma
     private LocalDateTime createdAt = LocalDateTime.now(ZoneId.of("Europe/Rome"));
 }

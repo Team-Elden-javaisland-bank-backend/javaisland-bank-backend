@@ -1,5 +1,7 @@
 package com.javaisland.bank_backend.user;
 
+import com.javaisland.bank_backend.user.RoleTypeRepository;
+import com.javaisland.bank_backend.user.UserStatusRepository;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,13 +16,17 @@ import java.util.List;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final UserStatusRepository userStatusRepository;
+    private final RoleTypeRepository roleTypeRepository;
 
-    // 📌 Rimosso UserStatusRepository dal costruttore
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository,
+                       UserStatusRepository userStatusRepository,
+                       RoleTypeRepository roleTypeRepository) {
         this.userRepository = userRepository;
+        this.userStatusRepository = userStatusRepository;
+        this.roleTypeRepository = roleTypeRepository;
     }
 
-    // 🧠 1. LOGICA DI REGISTRAZIONE UTENTE
     @Transactional
     public User registerUser(UserRegisterDTO dto) {
         if (userRepository.findByUsername(dto.getUsername()).isPresent()) {
@@ -35,7 +41,11 @@ public class UserService {
             throw new ApiBankException("Questo account Keycloak è già censito.");
         }
 
-        // Mappiamo i dati dal DTO all'Entity reale
+        var pendingStatus = userStatusRepository.findByStatusName("PENDING")
+                .orElseThrow(() -> new ApiBankException("Stato utente PENDING non configurato."));
+        var customerRole = roleTypeRepository.findByRoleName("CUSTOMER")
+                .orElseThrow(() -> new ApiBankException("Ruolo CUSTOMER non configurato."));
+
         User user = new User();
         user.setKeycloakId(dto.getKeycloakId());
         user.setUsername(dto.getUsername());
@@ -44,20 +54,20 @@ public class UserService {
         user.setBirthDate(dto.getBirthDate());
         user.setEmail(dto.getEmail());
         user.setBranchCode(dto.getBranchCode());
-
-        // 📌 Impostiamo direttamente l'Enum senza passare dal DB
-        user.setStatus(UserStatus.PENDING);
-        user.setRoleTypeId(1);
+        user.setStatus(pendingStatus);
+        user.setRoleType(customerRole);
 
         return userRepository.save(user);
     }
 
-    // 🧠 2. STAMPA SU FILE DEI CORRENTISTI ORDINATI
     public void exportCustomersToFile(String filePath) {
         List<User> users = userRepository.findAll();
 
+        var customerRole = roleTypeRepository.findByRoleName("CUSTOMER")
+                .orElseThrow(() -> new ApiBankException("Ruolo CUSTOMER non configurato."));
+
         List<User> sortedCustomers = users.stream()
-                .filter(u -> u.getRoleTypeId() == 1)
+                .filter(u -> u.getRoleType().getId().equals(customerRole.getId()))
                 .sorted(Comparator.comparing(User::getFirstName).thenComparing(User::getLastName))
                 .toList();
 

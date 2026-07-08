@@ -1,5 +1,7 @@
 package com.javaisland.bank_backend.card;
 
+import com.javaisland.bank_backend.card.CardStatus;
+import com.javaisland.bank_backend.card.CardType;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
@@ -28,12 +30,12 @@ public class Card {
     @Column(nullable = false, length = 3)
     private String cvv;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status_name", length = 30)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "status_id")
     private CardStatus status;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "type_name", nullable = false, length = 30)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "card_type_id", nullable = false)
     private CardType cardType;
 
     @Column(name = "account_id", nullable = false)
