@@ -1,0 +1,60 @@
+package com.javaisland.bank_backend.employee.controller;
+
+import com.javaisland.bank_backend.account.dto.AccountResponseDto;
+import com.javaisland.bank_backend.account.service.AccountService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/employee/accounts")
+@RequiredArgsConstructor
+@PreAuthorize("hasRole('D')")
+public class EmployeeAccountController {
+
+    private final AccountService accountService;
+
+    @GetMapping
+    public ResponseEntity<List<AccountResponseDto>> listAccounts(
+            @RequestParam(required = false) Integer status) {
+        List<AccountResponseDto> accounts = accountService.getAllAccountsByStatus(status);
+        return ResponseEntity.ok(accounts);
+    }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<AccountResponseDto>> getAccountsByUserId(@PathVariable Long userId) {
+        return ResponseEntity.ok(accountService.getAccountsByUserId(userId));
+    }
+
+    @PutMapping("/{accountNumber}/activate")
+    public ResponseEntity<String> activate(@PathVariable String accountNumber) {
+        accountService.activateAccount(accountNumber);
+        return ResponseEntity.ok("Account " + accountNumber + " activated.");
+    }
+
+    @PutMapping("/{accountNumber}/closure/validate")
+    public ResponseEntity<String> validateClosure(@PathVariable String accountNumber) {
+        accountService.validateClosure(accountNumber);
+        return ResponseEntity.ok("Account " + accountNumber + " closed.");
+    }
+
+    @PutMapping("/{accountNumber}/closure/reject")
+    public ResponseEntity<String> rejectClosure(@PathVariable String accountNumber) {
+        accountService.rejectClosure(accountNumber);
+        return ResponseEntity.ok("Closure request rejected, account " + accountNumber + " is active again.");
+    }
+
+    @PutMapping("/{accountNumber}/freeze")
+    public ResponseEntity<String> freeze(@PathVariable String accountNumber) {
+        accountService.freezeAccount(accountNumber);
+        return ResponseEntity.ok("Account " + accountNumber + " frozen.");
+    }
+
+    @GetMapping("/{accountNumber}")
+    public ResponseEntity<AccountResponseDto> getDetail(@PathVariable String accountNumber) {
+        return ResponseEntity.ok(accountService.getAccountDetailAsEmployee(accountNumber));
+    }
+}

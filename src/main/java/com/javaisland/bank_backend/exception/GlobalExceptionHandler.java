@@ -1,5 +1,6 @@
 package com.javaisland.bank_backend.exception;
 
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +39,19 @@ public class GlobalExceptionHandler {
         log.warn("Validation failed: {}", fieldErrors);
         ErrorResponseDto body = new ErrorResponseDto(
                 LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", fieldErrors);
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponseDto> handleConstraintViolation(ConstraintViolationException ex) {
+        String violations = ex.getConstraintViolations().stream()
+                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                .reduce((a, b) -> a + "; " + b)
+                .orElse("Validation failed");
+
+        log.warn("Entity validation failed: {}", violations);
+        ErrorResponseDto body = new ErrorResponseDto(
+                LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", violations);
         return ResponseEntity.badRequest().body(body);
     }
 

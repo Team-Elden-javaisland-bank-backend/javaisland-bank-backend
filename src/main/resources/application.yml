@@ -14,15 +14,22 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: ${DB_DDL_AUTO:validate}
+      ddl-auto: ${DB_DDL_AUTO:update}
     show-sql: true
     properties:
       hibernate:
         format_sql: true
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: http://localhost:8080/realms/real-bank-realm
-          jwk-set-uri: http://localhost:8080/realms/real-bank-realm/protocol/openid-connect/certs
+app:
+  jwt:
+    issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/javaisland-realm}
+
+keycloak:
+  realm: ${KEYCLOAK_REALM:javaisland-realm}
+  auth-server-url: ${KEYCLOAK_AUTH_URL:http://localhost:8080}
+  client-id: ${KEYCLOAK_CLIENT_ID:bank-backend}
+  # Client secret richiesto se client authentication = ON su Keycloak
+  client-secret: ${KEYCLOAK_CLIENT_SECRET:}
+  # Admin creds per creare utenti Keycloak via Admin REST API (master realm)
+  admin-username: ${KEYCLOAK_ADMIN_USERNAME:admin}
+  admin-password: ${KEYCLOAK_ADMIN_PASSWORD:admin}
