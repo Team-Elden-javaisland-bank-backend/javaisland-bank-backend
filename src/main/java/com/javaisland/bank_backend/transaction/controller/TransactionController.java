@@ -1,6 +1,7 @@
 package com.javaisland.bank_backend.transaction.controller;
 
 import com.javaisland.bank_backend.common.PageResponseDto;
+import com.javaisland.bank_backend.transaction.dto.TransferRequestDto;
 import com.javaisland.bank_backend.transaction.dto.TransactionRequestDto;
 import com.javaisland.bank_backend.transaction.dto.TransactionResponseDto;
 import com.javaisland.bank_backend.transaction.service.TransactionService;
@@ -40,6 +41,13 @@ public class TransactionController {
         Long userId = getUserId(jwt);
         transactionService.withdraw(userId, request);
         return ResponseEntity.ok("Withdrawal completed.");
+    }
+
+    @PostMapping("/transfer")
+    public ResponseEntity<TransactionResponseDto> transfer(@AuthenticationPrincipal Jwt jwt,
+                                                            @Valid @RequestBody TransferRequestDto request) {
+        Long userId = getUserId(jwt);
+        return ResponseEntity.ok(transactionService.transfer(userId, request));
     }
 
     @GetMapping("/recent/{accountNumber}")

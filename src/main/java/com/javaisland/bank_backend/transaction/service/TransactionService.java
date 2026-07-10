@@ -3,8 +3,10 @@ package com.javaisland.bank_backend.transaction.service;
 import com.javaisland.bank_backend.account.model.Account;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.account.model.AccountStatus;
+import com.javaisland.bank_backend.beneficiary.service.BeneficiaryService;
 import com.javaisland.bank_backend.common.PageResponseDto;
 import com.javaisland.bank_backend.exception.ApiBankException;
+import com.javaisland.bank_backend.transaction.dto.TransferRequestDto;
 import com.javaisland.bank_backend.transaction.dto.TransactionRequestDto;
 import com.javaisland.bank_backend.transaction.dto.TransactionResponseDto;
 import com.javaisland.bank_backend.transaction.model.Transaction;
@@ -43,6 +45,7 @@ public class TransactionService {
     private final TransactionStatusRepository transactionStatusRepository;
     private final TransactionTypeRepository transactionTypeRepository;
     private final UserRepository userRepository;
+    private final BeneficiaryService beneficiaryService;
 
     @Transactional
     public Transaction transferFunds(Account source, Account destination, BigDecimal amount, String typeName, String statusName, String description) {
@@ -111,6 +114,26 @@ public class TransactionService {
         Account account = getAccountOrThrow(request.getAccountNumber());
         assertOwnership(userId, account);
         transferFunds(account, null, request.getAmount(), "WITHDRAWAL", "COMPLETED", "Withdrawal");
+    }
+
+    @Transactional
+    public TransactionResponseDto transfer(Long userId, TransferRequestDto request) {
+        String destAccountNumber = request.getDestinationAccountNumber();
+        if (request.getBeneficiaryId() != null) {
+            destAccountNumber = beneficiaryService.resolveAccountNumber(userId, request.getBeneficiaryId());
+        }
+        if (destAccountNumber == null || destAccountNumber.isBlank()) {
+            throw new ApiBankException("Destination account or beneficiary is required.", "INVALID_TRANSFER");
+        }
+        if (request.getSourceAccountNumber().equals(destAccountNumber)) {
+            throw new ApiBankException("Source and destination accounts must be different.", "INVALID_TRANSFER");
+        }
+        Account source = getAccountOrThrow(request.getSourceAccountNumber());
+        assertOwnership(userId, source);
+        Account destination = getAccountOrThrow(destAccountNumber);
+        String description = request.getDescription() != null ? request.getDescription() : "Transfer";
+        Transaction tx = transferFunds(source, destination, request.getAmount(), "TRANSFER", "COMPLETED", description);
+        return mapToResponseDto(tx);
     }
 
     @Transactional(readOnly = true)

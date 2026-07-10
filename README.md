@@ -69,6 +69,7 @@ bank-backend/
 ├── docker-compose.yml                  # PostgreSQL + Keycloak
 ├── pom.xml                             # Maven dependencies
 ├── mvnw / mvnw.cmd                     # Maven Wrapper
+├── database-schema.txt                 # Schema DB in formato DBML
 ├── endpoints.txt                       # Elenco API endpoints
 ├── admin-jwt.txt                       # JWT pre-generato per admin
 │
@@ -104,6 +105,19 @@ bank-backend/
     │   └── service/
     │       ├── KeycloakAdminService.java
     │       └── RegistrationService.java
+    │
+    ├── beneficiary/                     # Rubrica beneficiari
+    │   ├── controller/
+    │   │   └── BeneficiaryController.java
+    │   ├── dto/
+    │   │   ├── BeneficiaryRequestDto.java
+    │   │   └── BeneficiaryResponseDto.java
+    │   ├── model/
+    │   │   └── Beneficiary.java
+    │   ├── repository/
+    │   │   └── BeneficiaryRepository.java
+    │   └── service/
+    │       └── BeneficiaryService.java
     │
     ├── card/                            # Carte
     │   ├── controller/
@@ -148,7 +162,8 @@ bank-backend/
     │   │   └── TransactionController.java
     │   ├── dto/
     │   │   ├── TransactionRequestDto.java
-    │   │   └── TransactionResponseDto.java
+    │   │   ├── TransactionResponseDto.java
+    │   │   └── TransferRequestDto.java
     │   ├── model/
     │   │   ├── Transaction.java
     │   │   ├── TransactionStatus.java
@@ -191,6 +206,7 @@ bank-backend/
 ### Tabelle di Dominio (Lookup)
 
 Popolate automaticamente da `DataInitializer` al primo avvio.
+Schema completo in [database-schema.txt](database-schema.txt).
 
 | Tabella | Valori Seed |
 |---|---|
@@ -209,7 +225,8 @@ Popolate automaticamente da `DataInitializer` al primo avvio.
 |---|---|
 | `users` | Correntisti e dipendenti. FK → `user_statuses`, `role_types` |
 | `accounts` | Conti correnti. FK → `users` |
-| `cards` | Carte di debito/credito. FK → `cards` → `card_statuses`, `card_types` |
+| `cards` | Carte di debito/credito. FK → `card_statuses`, `card_types` |
+| `beneficiaries` | Rubrica beneficiari per bonifici. FK → `users`, unique(user_id, destination_account_number) |
 | `transactions` | Movimenti contabili. FK → `transaction_types`, `transaction_statuses` |
 
 ---
@@ -277,7 +294,7 @@ Content-Type: application/json
 
 {
   "username": "admin",
-  "password": "admin123"
+  "password": "admin"
 }
 ```
 
@@ -322,7 +339,7 @@ Variabili d'ambiente disponibili: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `K
 
 ## 8. API Endpoints
 
-Totale: **31 endpoints** (3 pubblici, 11 customer, 17 employee)
+Totale: **35 endpoints** (3 pubblici, 15 customer, 17 employee)
 
 ### Pubblici — `/api/v1/auth`
 
@@ -346,6 +363,7 @@ Totale: **31 endpoints** (3 pubblici, 11 customer, 17 employee)
 |---|---|---|
 | POST | `/deposit` | Versamento su proprio conto |
 | POST | `/withdraw` | Prelievo da proprio conto |
+| POST | `/transfer` | Bonifico verso altro conto (o beneficiario salvato) |
 | GET | `/recent/{accountNumber}` | Ultime 10 transazioni |
 | GET | `/all?start=&end=&page=&size=` | Storico paginato con filtri data |
 
@@ -355,6 +373,14 @@ Totale: **31 endpoints** (3 pubblici, 11 customer, 17 employee)
 |---|---|---|
 | GET | `/` | Lista tutte le mie carte |
 | GET | `/{cardId}` | Dettaglio carta |
+
+### Customer — Beneficiari — `/api/v1/customer/beneficiaries` `[C]`
+
+| Metodo | Path | Descrizione |
+|---|---|---|
+| GET | `/` | Lista miei beneficiari salvati |
+| POST | `/` | Salva nuovo beneficiario (nickname + IBAN) |
+| DELETE | `/{id}` | Rimuovi beneficiario |
 
 ### Employee — Account — `/api/v1/employee/accounts` `[D]`
 
@@ -497,7 +523,7 @@ curl -X POST http://localhost:8081/api/v1/auth/keycloak-login \
 # Login admin
 curl -X POST http://localhost:8081/api/v1/auth/keycloak-login \
   -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "admin123"}'
+  -d '{"username": "admin", "password": "admin"}'
 ```
 
 ### Lista conti (customer)
@@ -521,6 +547,39 @@ curl -X POST http://localhost:8081/api/v1/customer/transactions/deposit \
   -H "Authorization: Bearer <customer-token>" \
   -H "Content-Type: application/json" \
   -d '{"accountNumber": "IT...", "amount": 500}'
+```
+
+### Bonifico
+
+```bash
+curl -X POST http://localhost:8081/api/v1/customer/transactions/transfer \
+  -H "Authorization: Bearer <customer-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"sourceAccountNumber": "IT...", "destinationAccountNumber": "IT...", "amount": 250, "description": "Bonifico"}
+
+# Usando beneficiario salvato
+curl -X POST http://localhost:8081/api/v1/customer/transactions/transfer \
+  -H "Authorization: Bearer <customer-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"sourceAccountNumber": "IT...", "beneficiaryId": 1, "amount": 250}'
+```
+
+### Gestione beneficiari
+
+```bash
+# Salva beneficiario
+curl -X POST http://localhost:8081/api/v1/customer/beneficiaries \
+  -H "Authorization: Bearer <customer-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"nickname": "Mamma", "destinationAccountNumber": "IT..."}'
+
+# Lista beneficiari
+curl -X GET http://localhost:8081/api/v1/customer/beneficiaries \
+  -H "Authorization: Bearer <customer-token>"
+
+# Rimuovi beneficiario
+curl -X DELETE http://localhost:8081/api/v1/customer/beneficiaries/1 \
+  -H "Authorization: Bearer <customer-token>"
 ```
 
 ### Storico transazioni
