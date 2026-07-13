@@ -80,25 +80,29 @@ bank-backend/
     │   ├── controller/
     │   │   └── AccountController.java
     │   ├── dto/
+    │   │   ├── AccountLimitResponseDto.java
     │   │   ├── AccountResponseDto.java
     │   │   ├── CloseAccountRequestDto.java
-    │   │   └── OpenAccountRequestDto.java
+    │   │   ├── OpenAccountRequestDto.java
+    │   │   └── SetLimitRequestDto.java
     │   ├── model/
     │   │   ├── Account.java
+    │   │   ├── AccountLimit.java
     │   │   ├── AccountStatus.java
     │   │   └── LimitType.java
     │   ├── repository/
+    │   │   ├── AccountLimitRepository.java
     │   │   ├── AccountRepository.java
     │   │   ├── AccountStatusRepository.java
     │   │   └── LimitTypeRepository.java
     │   └── service/
+    │       ├── AccountLimitService.java
     │       └── AccountService.java
     │
     ├── auth/                            # Autenticazione
     │   ├── controller/
     │   │   └── AuthController.java
     │   ├── dto/
-    │   │   ├── CancelRegistrationRequestDto.java
     │   │   ├── LoginRequestDto.java
     │   │   ├── LoginResponseDto.java
     │   │   └── RegisterRequestDto.java
@@ -215,7 +219,7 @@ Schema completo in [database-schema.txt](database-schema.txt).
 | `account_statuses` | INACTIVE, ACTIVE, FROZEN, CLOSED |
 | `card_statuses` | INACTIVE, ACTIVE, BLOCKED |
 | `card_types` | DEBIT, CREDIT |
-| `limit_types` | DAILY_TRANSFER, MONTHLY_TRANSFER, ATM_WITHDRAWAL, POS_SPENDING |
+| `limit_types` | DAILY_TRANSFER, SINGLE_TRANSFER, INSTANT_TRANSFER_SINGLE, MONTHLY_TRANSFER, ATM_WITHDRAWAL, POS_SPENDING |
 | `transaction_types` | DEPOSIT, WITHDRAWAL, TRANSFER, INITIAL_TRANSFER |
 | `transaction_statuses` | PENDING, COMPLETED, FAILED, REJECTED |
 
@@ -225,6 +229,7 @@ Schema completo in [database-schema.txt](database-schema.txt).
 |---|---|
 | `users` | Correntisti e dipendenti. FK → `user_statuses`, `role_types` |
 | `accounts` | Conti correnti. FK → `users` |
+| `account_limits` | Massimali operativi per conto. FK → `accounts`, `limit_types`, unique(account_id, limit_type_id) |
 | `cards` | Carte di debito/credito. FK → `card_statuses`, `card_types` |
 | `beneficiaries` | Rubrica beneficiari per bonifici. FK → `users`, unique(user_id, destination_account_number) |
 | `transactions` | Movimenti contabili. FK → `transaction_types`, `transaction_statuses` |
@@ -339,7 +344,7 @@ Variabili d'ambiente disponibili: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `K
 
 ## 8. API Endpoints
 
-Totale: **35 endpoints** (3 pubblici, 15 customer, 17 employee)
+Totale: **36 endpoints** (2 pubblici, 15 customer, 18 employee, 1 export)
 
 ### Pubblici — `/api/v1/auth`
 
@@ -356,6 +361,7 @@ Totale: **35 endpoints** (3 pubblici, 15 customer, 17 employee)
 | POST | `/open` | Apri conto aggiuntivo (con bonifico iniziale) |
 | POST | `/closure-request` | Richiedi chiusura conto |
 | GET | `/{accountNumber}` | Dettaglio conto (balance, stato, data) |
+| GET | `/{accountNumber}/limits` | Visualizza massimali del conto |
 
 ### Customer — Transazioni — `/api/v1/customer/transactions` `[C]`
 
@@ -393,6 +399,8 @@ Totale: **35 endpoints** (3 pubblici, 15 customer, 17 employee)
 | PUT | `/{accountNumber}/freeze` | Congela conto (ACTIVE → FROZEN) |
 | PUT | `/{accountNumber}/closure/validate` | Valida chiusura (FROZEN → CLOSED) |
 | PUT | `/{accountNumber}/closure/reject` | Rifiuta chiusura (FROZEN → ACTIVE) |
+| GET | `/{accountNumber}/limits` | Visualizza massimali del conto |
+| PUT | `/{accountNumber}/limits/{limitType}` | Imposta massimale (es. DAILY_TRANSFER, SINGLE_TRANSFER) |
 
 ### Employee — Utenti — `/api/v1/employee/users` `[D]`
 
@@ -447,6 +455,7 @@ Formato unico risposta errori:
 | `ACCOUNT_INACTIVE` | 400 | Account non attivo |
 | `INVALID_ACCOUNT_STATE` | 400 | Operazione non permessa sullo stato attuale |
 | `INSUFFICIENT_FUNDS` | 400 | Saldo insufficiente |
+| `LIMIT_EXCEEDED` | 400 | Superato massimale operativo (giornaliero, mensile, singolo) |
 | `NON_ZERO_BALANCE` | 400 | Chiusura conto con saldo non zero |
 | `FORBIDDEN` | 400 | Conto non appartiene all'utente |
 | `EMAIL_ALREADY_REGISTERED` | 400 | Email già registrata |

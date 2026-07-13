@@ -115,8 +115,10 @@ public class DataInitializer implements CommandLineRunner {
 
     private void seedLimitTypes() {
         if (limitTypeRepository.count() > 0) return;
-        limitTypeRepository.save(new LimitType(null, "DAILY_TRANSFER", "Maximum daily transfer amount"));
-        limitTypeRepository.save(new LimitType(null, "MONTHLY_TRANSFER", "Maximum monthly transfer amount"));
+        limitTypeRepository.save(new LimitType(null, "DAILY_TRANSFER", "Maximum cumulative transfer amount per day"));
+        limitTypeRepository.save(new LimitType(null, "SINGLE_TRANSFER", "Maximum amount per single transfer"));
+        limitTypeRepository.save(new LimitType(null, "INSTANT_TRANSFER_SINGLE", "Maximum amount per single instant transfer"));
+        limitTypeRepository.save(new LimitType(null, "MONTHLY_TRANSFER", "Maximum cumulative transfer amount per month"));
         limitTypeRepository.save(new LimitType(null, "ATM_WITHDRAWAL", "Maximum ATM withdrawal per transaction"));
         limitTypeRepository.save(new LimitType(null, "POS_SPENDING", "Maximum POS spending per transaction"));
     }

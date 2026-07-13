@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Secrets / Logs ###
+admin-jwt.txt
+app.err
+app.log
+keycloak-realm-export.json
+*.ps1

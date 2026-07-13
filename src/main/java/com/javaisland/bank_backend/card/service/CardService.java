@@ -2,6 +2,7 @@ package com.javaisland.bank_backend.card.service;
 
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.card.dto.CardResponseDto;
+import com.javaisland.bank_backend.card.dto.CardSensitiveDto;
 import com.javaisland.bank_backend.card.model.Card;
 import com.javaisland.bank_backend.card.repository.CardRepository;
 import com.javaisland.bank_backend.card.repository.CardStatusRepository;
@@ -99,6 +100,23 @@ public class CardService {
     }
 
     @Transactional(readOnly = true)
+    public CardSensitiveDto getCardSensitiveForUser(Long userId, Long cardId) {
+        var user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+        var card = cardRepository.findById(cardId)
+                .orElseThrow(() -> new ApiBankException("Carta non trovata.", "CARD_NOT_FOUND"));
+        var accounts = accountRepository.findByUserId(user.getId());
+        var ownsAccount = accounts.stream().anyMatch(a -> a.getId().equals(card.getAccountId()));
+        if (!ownsAccount) {
+            throw new ApiBankException("Carta non appartiene all'utente.", "FORBIDDEN");
+        }
+        return CardSensitiveDto.builder()
+                .cardNumber(card.getCardNumber())
+                .cvv(card.getCvv())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
     public List<CardResponseDto> getAllCards() {
         return cardRepository.findAll().stream()
                 .map(this::toDto)
@@ -120,6 +138,9 @@ public class CardService {
     }
 
     private CardResponseDto toDto(Card card) {
+        String acctNum = accountRepository.findById(card.getAccountId())
+                .map(a -> a.getAccountNumber())
+                .orElse(null);
         return CardResponseDto.builder()
                 .id(card.getId())
                 .maskedCardNumber("****" + card.getCardNumber().substring(12))
@@ -128,6 +149,7 @@ public class CardService {
                 .cardType(card.getCardType().getTypeName())
                 .status(card.getStatus().getStatusName())
                 .accountId(card.getAccountId())
+                .accountNumber(acctNum)
                 .build();
     }
 

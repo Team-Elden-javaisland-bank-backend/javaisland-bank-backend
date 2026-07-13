@@ -1,0 +1,66 @@
+// ENDPOINT API Javaisland Bank
+// Legenda: [C] = customer, [D] = employee/dipendente
+
+// ======================================================================
+// PUBBLICI (no autenticazione)
+// ======================================================================
+
+POST   /api/v1/auth/register                              // Registrazione nuovo utente
+POST   /api/v1/auth/keycloak-login                        // Login, ritorna JWT
+
+// ======================================================================
+// CUSTOMER — /api/v1/customer  [C]
+// ======================================================================
+
+// --- Account ---
+GET    /api/v1/customer/accounts                           // Lista miei conti
+POST   /api/v1/customer/accounts/open                      // Apri conto aggiuntivo
+POST   /api/v1/customer/accounts/closure-request           // Richiedi chiusura conto
+GET    /api/v1/customer/accounts/{accountNumber}           // Dettaglio conto
+
+// --- Transazioni ---
+POST   /api/v1/customer/transactions/deposit               // Versamento su proprio conto
+POST   /api/v1/customer/transactions/withdraw              // Prelievo da proprio conto
+POST   /api/v1/customer/transactions/transfer              // Bonifico verso altro conto
+GET    /api/v1/customer/transactions/recent/{accountNumber} // Ultime 10 transazioni
+GET    /api/v1/customer/transactions/all                   // Storico paginato con filtri data
+
+// --- Carte ---
+GET    /api/v1/customer/cards                              // Lista mie carte
+GET    /api/v1/customer/cards/{cardId}                     // Dettaglio carta
+
+// --- Beneficiari (rubrica) ---
+GET    /api/v1/customer/beneficiaries                      // Lista miei beneficiari
+POST   /api/v1/customer/beneficiaries                      // Salva nuovo beneficiario
+DELETE /api/v1/customer/beneficiaries/{id}                 // Rimuovi beneficiario
+
+// ======================================================================
+// EMPLOYEE — /api/v1/employee  [D]
+// ======================================================================
+
+// --- Account ---
+GET    /api/v1/employee/accounts                           // Lista tutti i conti
+GET    /api/v1/employee/accounts/user/{userId}             // Conti per utente
+GET    /api/v1/employee/accounts/{accountNumber}           // Dettaglio conto
+PUT    /api/v1/employee/accounts/{accountNumber}/activate   // Attiva conto
+PUT    /api/v1/employee/accounts/{accountNumber}/freeze     // Congela conto
+PUT    /api/v1/employee/accounts/{accountNumber}/closure/validate  // Valida chiusura
+PUT    /api/v1/employee/accounts/{accountNumber}/closure/reject    // Rifiuta chiusura
+
+// --- Utenti ---
+GET    /api/v1/employee/users/registrations/pending        // Registrazioni in attesa
+PUT    /api/v1/employee/users/registrations/{userId}/validate      // Valida registrazione
+PUT    /api/v1/employee/users/registrations/{userId}/reject        // Rifiuta registrazione
+GET    /api/v1/employee/users/customers                    // Lista clienti
+
+// --- Carte ---
+GET    /api/v1/employee/cards                              // Lista tutte le carte
+GET    /api/v1/employee/cards/{cardId}                     // Dettaglio carta
+GET    /api/v1/employee/accounts/{accountNumber}/cards     // Carte per conto
+
+// ======================================================================
+// ADMIN / VARIE
+// ======================================================================
+
+PATCH  /api/cards/{cardId}/status          [D]            // Aggiorna stato carta
+GET    /api/users/export                                 // Esporta clienti su file

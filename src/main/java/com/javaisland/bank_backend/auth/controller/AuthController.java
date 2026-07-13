@@ -1,6 +1,5 @@
 package com.javaisland.bank_backend.auth.controller;
 
-import com.javaisland.bank_backend.auth.dto.CancelRegistrationRequestDto;
 import com.javaisland.bank_backend.auth.dto.LoginRequestDto;
 import com.javaisland.bank_backend.auth.dto.LoginResponseDto;
 import com.javaisland.bank_backend.auth.dto.RegisterRequestDto;
@@ -13,7 +12,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.*;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -44,14 +42,6 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<UserResponseDto> register(@Valid @RequestBody RegisterRequestDto requestDto) {
         return ResponseEntity.ok(registrationService.register(requestDto));
-    }
-
-    /** Login via Keycloak Direct Access Grant. */
-    @PostMapping("/cancel-registration")
-    @PreAuthorize("hasRole('D')")
-    public ResponseEntity<String> cancelRegistration(@Valid @RequestBody CancelRegistrationRequestDto request) {
-        registrationService.cancelRegistration(request.getUserId());
-        return ResponseEntity.ok("Registrazione annullata con successo.");
     }
 
     @PostMapping("/keycloak-login")

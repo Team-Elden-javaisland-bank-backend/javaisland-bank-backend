@@ -1,6 +1,7 @@
 package com.javaisland.bank_backend.card.controller;
 
 import com.javaisland.bank_backend.card.dto.CardResponseDto;
+import com.javaisland.bank_backend.card.dto.CardSensitiveDto;
 import com.javaisland.bank_backend.card.service.CardService;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,13 @@ public class CustomerCardController {
                                                       @PathVariable Long cardId) {
         Long userId = getUserId(jwt);
         return ResponseEntity.ok(cardService.getCardDetailForUser(userId, cardId));
+    }
+
+    @GetMapping("/{cardId}/sensitive")
+    public ResponseEntity<CardSensitiveDto> getMyCardSensitive(@AuthenticationPrincipal Jwt jwt,
+                                                                @PathVariable Long cardId) {
+        Long userId = getUserId(jwt);
+        return ResponseEntity.ok(cardService.getCardSensitiveForUser(userId, cardId));
     }
 
     private Long getUserId(Jwt jwt) {

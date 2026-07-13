@@ -3,6 +3,7 @@ package com.javaisland.bank_backend.transaction.service;
 import com.javaisland.bank_backend.account.model.Account;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.account.model.AccountStatus;
+import com.javaisland.bank_backend.account.service.AccountLimitService;
 import com.javaisland.bank_backend.beneficiary.service.BeneficiaryService;
 import com.javaisland.bank_backend.common.PageResponseDto;
 import com.javaisland.bank_backend.exception.ApiBankException;
@@ -38,7 +39,7 @@ import java.util.List;
 @Slf4j
 public class TransactionService {
 
-    private static final long MAX_SEARCH_SPAN_DAYS = 30;
+    private static final long MAX_SEARCH_SPAN_DAYS = 365;
 
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
@@ -46,6 +47,7 @@ public class TransactionService {
     private final TransactionTypeRepository transactionTypeRepository;
     private final UserRepository userRepository;
     private final BeneficiaryService beneficiaryService;
+    private final AccountLimitService accountLimitService;
 
     @Transactional
     public Transaction transferFunds(Account source, Account destination, BigDecimal amount, String typeName, String statusName, String description) {
@@ -131,6 +133,7 @@ public class TransactionService {
         Account source = getAccountOrThrow(request.getSourceAccountNumber());
         assertOwnership(userId, source);
         Account destination = getAccountOrThrow(destAccountNumber);
+        accountLimitService.validateTransfer(source, request.getAmount());
         String description = request.getDescription() != null ? request.getDescription() : "Transfer";
         Transaction tx = transferFunds(source, destination, request.getAmount(), "TRANSFER", "COMPLETED", description);
         return mapToResponseDto(tx);

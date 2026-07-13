@@ -1,8 +1,10 @@
 package com.javaisland.bank_backend.account.controller;
 
+import com.javaisland.bank_backend.account.dto.AccountLimitResponseDto;
 import com.javaisland.bank_backend.account.dto.AccountResponseDto;
 import com.javaisland.bank_backend.account.dto.CloseAccountRequestDto;
 import com.javaisland.bank_backend.account.dto.OpenAccountRequestDto;
+import com.javaisland.bank_backend.account.service.AccountLimitService;
 import com.javaisland.bank_backend.account.service.AccountService;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import jakarta.validation.Valid;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 public class AccountController {
 
     private final AccountService accountService;
+    private final AccountLimitService accountLimitService;
     private final UserRepository userRepository;
 
     @GetMapping
@@ -52,9 +55,17 @@ public class AccountController {
 
     @GetMapping("/{accountNumber}")
     public ResponseEntity<AccountResponseDto> getDetail(@AuthenticationPrincipal Jwt jwt,
-                                                          @PathVariable String accountNumber) {
+                                                           @PathVariable String accountNumber) {
         Long userId = getUserId(jwt);
         return ResponseEntity.ok(accountService.getAccountDetail(userId, accountNumber));
+    }
+
+    @GetMapping("/{accountNumber}/limits")
+    public ResponseEntity<List<AccountLimitResponseDto>> listLimits(@AuthenticationPrincipal Jwt jwt,
+                                                                     @PathVariable String accountNumber) {
+        Long userId = getUserId(jwt);
+        accountService.getAccountDetail(userId, accountNumber);
+        return ResponseEntity.ok(accountLimitService.getLimits(accountNumber));
     }
 
     private Long getUserId(Jwt jwt) {

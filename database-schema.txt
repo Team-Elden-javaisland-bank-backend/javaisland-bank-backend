@@ -21,7 +21,7 @@ Table account_statuses {
 
 Table limit_types {
   id integer [primary key, increment]
-  limit_name varchar(30) [unique, not null]   // 'DAILY_TRANSFER', 'MONTHLY_TRANSFER', 'ATM_WITHDRAWAL', 'POS_SPENDING'
+  limit_name varchar(30) [unique, not null]   // 'DAILY_TRANSFER', 'SINGLE_TRANSFER', 'INSTANT_TRANSFER_SINGLE', 'MONTHLY_TRANSFER', 'ATM_WITHDRAWAL', 'POS_SPENDING'
   notes varchar(255)
 }
 
@@ -87,6 +87,17 @@ Table cards {
   account_id integer [not null]
 }
 
+Table account_limits {
+  id integer [primary key, increment]
+  account_id integer [not null]
+  limit_type_id integer [not null]
+  max_amount decimal(15,2) [not null]                // soglia massima (es. 5000.00)
+  updated_at timestamp
+  indexes {
+    (account_id, limit_type_id) [unique]             // un limite per tipo per conto
+  }
+}
+
 Table beneficiaries {
   id integer [primary key, increment]
   nickname varchar(100) [not null]
@@ -122,6 +133,8 @@ Ref: accounts.user_id > users.id
 Ref: cards.card_type_id > card_types.id
 Ref: cards.status_id > card_statuses.id
 Ref: cards.account_id > accounts.id
+Ref: account_limits.account_id > accounts.id
+Ref: account_limits.limit_type_id > limit_types.id
 Ref: beneficiaries.user_id > users.id
 Ref: transactions.type_id > transaction_types.id
 Ref: transactions.status_id > transaction_statuses.id
