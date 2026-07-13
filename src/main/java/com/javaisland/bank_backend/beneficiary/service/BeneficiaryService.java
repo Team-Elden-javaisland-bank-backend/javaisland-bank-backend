@@ -28,6 +28,10 @@ public class BeneficiaryService {
         var account = accountRepository.findByAccountNumber(request.getDestinationAccountNumber())
                 .orElseThrow(() -> new ApiBankException("Account " + request.getDestinationAccountNumber() + " not found.", "ACCOUNT_NOT_FOUND"));
 
+        if (account.getUser().getId().equals(userId)) {
+            throw new ApiBankException("Non puoi aggiungere uno dei tuoi conti come beneficiario.", "SELF_BENEFICIARY_FORBIDDEN");
+        }
+
         if (account.getStatusId() != AccountStatus.ACTIVE) {
             throw new ApiBankException("Destination account is not active.", "INVALID_ACCOUNT_STATE");
         }
