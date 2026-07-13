@@ -40,6 +40,12 @@ public class EmployeeAccountController {
         return ResponseEntity.ok("Account " + accountNumber + " activated.");
     }
 
+    @PutMapping("/{accountNumber}/reject")
+    public ResponseEntity<String> reject(@PathVariable String accountNumber) {
+        accountService.rejectAccountRequest(accountNumber);
+        return ResponseEntity.ok("Account " + accountNumber + " request rejected.");
+    }
+
     @PutMapping("/{accountNumber}/closure/validate")
     public ResponseEntity<String> validateClosure(@PathVariable String accountNumber) {
         accountService.validateClosure(accountNumber);

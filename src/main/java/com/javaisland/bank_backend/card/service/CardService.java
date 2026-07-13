@@ -38,21 +38,42 @@ public class CardService {
     }
 
     public Card issueDebitCard(Long accountId, String holderName) {
+        return issueDebitCard(accountId, holderName, "INACTIVE");
+    }
+
+    public Card issueDebitCard(Long accountId, String holderName, String statusName) {
         var debitType = cardTypeRepository.findByTypeName("DEBIT")
                 .orElseThrow(() -> new ApiBankException("Tipo carta DEBIT non configurato."));
-        var activeStatus = cardStatusRepository.findByStatusName("ACTIVE")
-                .orElseThrow(() -> new ApiBankException("Stato carta ACTIVE non configurato."));
+        var status = cardStatusRepository.findByStatusName(statusName)
+                .orElseThrow(() -> new ApiBankException("Stato carta " + statusName + " non configurato."));
 
         Card card = new Card();
         card.setAccountId(accountId);
         card.setHolderName(holderName);
         card.setCardType(debitType);
-        card.setStatus(activeStatus);
+        card.setStatus(status);
         card.setExpirationDate(LocalDate.now().plusYears(5));
         card.setCvv(String.format("%03d", random.nextInt(1000)));
         card.setCardNumber(generateUniqueCardNumber());
 
         return cardRepository.save(card);
+    }
+
+    @Transactional
+    public void activateCardsByAccountId(Long accountId) {
+        var activeStatus = cardStatusRepository.findByStatusName("ACTIVE")
+                .orElseThrow(() -> new ApiBankException("Stato carta ACTIVE non configurato."));
+        cardRepository.findByAccountId(accountId).forEach(card -> {
+            if (!card.getStatus().getStatusName().equals("BLOCKED")) {
+                card.setStatus(activeStatus);
+                cardRepository.save(card);
+            }
+        });
+    }
+
+    @Transactional
+    public void deleteCardsByAccountId(Long accountId) {
+        cardRepository.findByAccountId(accountId).forEach(cardRepository::delete);
     }
 
     public Card updateCardStatus(Long cardId, String newStatusName) {

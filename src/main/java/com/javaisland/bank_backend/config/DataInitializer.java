@@ -106,11 +106,12 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedAccountStatuses() {
-        if (accountStatusRepository.count() > 0) return;
-        accountStatusRepository.save(new AccountStatus(null, "INACTIVE"));
-        accountStatusRepository.save(new AccountStatus(null, "ACTIVE"));
-        accountStatusRepository.save(new AccountStatus(null, "FROZEN"));
-        accountStatusRepository.save(new AccountStatus(null, "CLOSED"));
+        if (accountStatusRepository.count() == 0) {
+            accountStatusRepository.save(new AccountStatus(null, "INACTIVE"));
+            accountStatusRepository.save(new AccountStatus(null, "ACTIVE"));
+            accountStatusRepository.save(new AccountStatus(null, "FROZEN"));
+            accountStatusRepository.save(new AccountStatus(null, "CLOSED"));
+        }
     }
 
     private void seedLimitTypes() {

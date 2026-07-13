@@ -75,6 +75,10 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiBankException("Utente non trovato con id: " + userId));
 
+        if (user.getStatus() != null && "ACTIVE".equals(user.getStatus().getStatusName())) {
+            throw new ApiBankException("Utente già attivato. Usa l'endpoint di attivazione conti per i conti secondari.", "USER_ALREADY_ACTIVE");
+        }
+
         String keycloakId = null;
         if (user.getPlainPassword() != null && !user.getPlainPassword().isBlank()) {
             try {
@@ -100,12 +104,17 @@ public class UserService {
 
         List<Account> accounts = accountRepository.findByUserId(userId);
         try {
-            for (Account a : accounts) {
-                if (a.getStatusId() == AccountStatus.INACTIVE) {
-                    a.setStatusId(AccountStatus.ACTIVE);
-                    accountRepository.save(a);
-                    cardService.issueDebitCard(a.getId(), user.getFirstName() + " " + user.getLastName());
-                }
+            boolean userAlreadyHasActiveAccount = accounts.stream()
+                    .anyMatch(a -> a.getStatusId() == AccountStatus.ACTIVE);
+            if (!userAlreadyHasActiveAccount) {
+                accounts.stream()
+                        .filter(a -> a.getStatusId() == AccountStatus.INACTIVE)
+                        .findFirst()
+                        .ifPresent(a -> {
+                            a.setStatusId(AccountStatus.ACTIVE);
+                            accountRepository.save(a);
+                            cardService.issueDebitCard(a.getId(), user.getFirstName() + " " + user.getLastName(), "ACTIVE");
+                        });
             }
         } catch (Exception e) {
             if (keycloakId != null) {

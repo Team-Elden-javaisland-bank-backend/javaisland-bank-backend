@@ -6,6 +6,7 @@ import com.javaisland.bank_backend.account.dto.OpenAccountRequestDto;
 import com.javaisland.bank_backend.account.model.Account;
 import com.javaisland.bank_backend.account.model.AccountStatus;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
+import com.javaisland.bank_backend.card.service.CardService;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.transaction.service.TransactionService;
 import com.javaisland.bank_backend.user.model.User;
@@ -27,10 +28,12 @@ import java.util.UUID;
 public class AccountService {
 
     private static final int MAX_IBAN_GENERATION_ATTEMPTS = 5;
+    private static final int MAX_ACCOUNTS_PER_USER = 3;
 
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
     private final TransactionService transactionService;
+    private final CardService cardService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Account createInitialAccountForUser(User user) {
@@ -48,6 +51,12 @@ public class AccountService {
 
     @Transactional
     public void activateInitialAccountForUser(Long userId) {
+        boolean userHasActiveAccount = accountRepository.findByUserId(userId).stream()
+                .anyMatch(a -> a.getStatusId() == AccountStatus.ACTIVE);
+        if (userHasActiveAccount) {
+            throw new ApiBankException(
+                    "User already has an active account. Use employee account activation instead.", "INVALID_STATE");
+        }
         Account account = accountRepository.findByUserId(userId).stream()
                 .filter(a -> a.getStatusId() == AccountStatus.INACTIVE)
                 .findFirst()
@@ -64,9 +73,33 @@ public class AccountService {
         if (account.getStatusId() != AccountStatus.INACTIVE) {
             throw new ApiBankException("Account " + accountNumber + " is not pending activation.", "INVALID_ACCOUNT_STATE");
         }
+        boolean userHasActiveAccount = accountRepository.findByUserId(account.getUser().getId()).stream()
+                .anyMatch(a -> a.getStatusId() == AccountStatus.ACTIVE);
+        if (!userHasActiveAccount) {
+            throw new ApiBankException("Account " + accountNumber + " belongs to a registration in progress. Use registration activation instead.", "REGISTRATION_ACCOUNT");
+        }
         account.setStatusId(AccountStatus.ACTIVE);
         accountRepository.save(account);
-        log.info("Account {} activated by employee", accountNumber);
+        cardService.activateCardsByAccountId(account.getId());
+        log.info("Account {} activated by employee, cards activated", accountNumber);
+    }
+
+    @Transactional
+    public void rejectAccountRequest(String accountNumber) {
+        Account account = getAccountOrThrow(accountNumber);
+        if (account.getStatusId() != AccountStatus.INACTIVE) {
+            throw new ApiBankException("Account " + accountNumber + " is not pending activation.", "INVALID_ACCOUNT_STATE");
+        }
+        boolean userHasActiveAccount = accountRepository.findByUserId(account.getUser().getId()).stream()
+                .anyMatch(a -> a.getStatusId() == AccountStatus.ACTIVE);
+        if (!userHasActiveAccount) {
+            throw new ApiBankException("Account " + accountNumber + " belongs to a registration in progress. Cannot reject.", "REGISTRATION_ACCOUNT");
+        }
+        account.setStatusId(AccountStatus.CLOSED);
+        account.setClosedAt(LocalDateTime.now());
+        accountRepository.save(account);
+        cardService.deleteCardsByAccountId(account.getId());
+        log.info("Account {} request rejected by employee — CLOSED, cards deleted", accountNumber);
     }
 
     @Transactional
@@ -124,6 +157,21 @@ public class AccountService {
     public Account openAdditionalAccount(Long userId, OpenAccountRequestDto request) {
         User user = getUserOrThrow(userId);
 
+        long activeAccountCount = accountRepository.findByUserId(user.getId()).stream()
+                .filter(a -> a.getStatusId() != AccountStatus.CLOSED)
+                .count();
+        if (activeAccountCount >= MAX_ACCOUNTS_PER_USER) {
+            throw new ApiBankException(
+                    "Hai raggiunto il numero massimo di conti (" + MAX_ACCOUNTS_PER_USER + ").", "MAX_ACCOUNTS_REACHED");
+        }
+
+        boolean hasPendingAccount = accountRepository.findByUserId(user.getId()).stream()
+                .anyMatch(a -> a.getStatusId() == AccountStatus.INACTIVE);
+        if (hasPendingAccount) {
+            throw new ApiBankException(
+                    "Hai già un conto in attesa di approvazione. Può richiedere un nuovo conto solo dopo che quello corrente viene accettato.", "PENDING_ACCOUNT_EXISTS");
+        }
+
         Account sourceAccount = accountRepository.findByAccountNumber(request.getSourceAccountNumber())
                 .orElseThrow(() -> new ApiBankException("Source account not found.", "ACCOUNT_NOT_FOUND"));
         assertOwnership(sourceAccount, user);
@@ -132,23 +180,21 @@ public class AccountService {
             throw new ApiBankException("Source account " + sourceAccount.getAccountNumber() + " is not active.", "INVALID_ACCOUNT_STATE");
         }
 
+        if (sourceAccount.getBalance().compareTo(request.getInitialAmount()) < 0) {
+            throw new ApiBankException("Fondi insufficienti sul conto sorgente " + sourceAccount.getAccountNumber() + ".", "INSUFFICIENT_FUNDS");
+        }
+
         Account newAccount = new Account();
         newAccount.setAccountNumber(generateUniqueAccountNumber());
         newAccount.setBalance(BigDecimal.ZERO);
-        newAccount.setStatusId(AccountStatus.ACTIVE);
+        newAccount.setStatusId(AccountStatus.INACTIVE);
         newAccount.setUser(user);
         newAccount = accountRepository.save(newAccount);
 
-        transactionService.transferFunds(
-                sourceAccount,
-                newAccount,
-                request.getInitialAmount(),
-                "INITIAL_TRANSFER",
-                "COMPLETED",
-                "Opening additional account " + newAccount.getAccountNumber()
-        );
+        String holderName = user.getFirstName() + " " + user.getLastName();
+        cardService.issueDebitCard(newAccount.getId(), holderName);
 
-        log.info("User id={} opened additional account {} funded from {}", user.getId(), newAccount.getAccountNumber(), sourceAccount.getAccountNumber());
+        log.info("User id={} opened additional account {} (INACTIVE), card issued", user.getId(), newAccount.getAccountNumber());
         return newAccount;
     }
 
