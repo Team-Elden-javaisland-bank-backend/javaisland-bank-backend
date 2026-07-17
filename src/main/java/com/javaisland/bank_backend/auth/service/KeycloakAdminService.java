@@ -126,6 +126,11 @@ public class KeycloakAdminService {
         }
     }
 
+    public void assignRole(String keycloakId, String roleName) {
+        String adminToken = getAdminToken();
+        assignRealmRole(keycloakId, roleName, adminToken);
+    }
+
     private void assignRealmRole(String keycloakId, String roleName, String adminToken) {
         String roleUrl = keycloakAuthUrl + "/admin/realms/" + keycloakRealm + "/roles/" + roleName;
 

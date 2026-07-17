@@ -4,6 +4,7 @@ import com.javaisland.bank_backend.validation.Adult;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,9 +20,11 @@ import java.time.LocalDate;
 public class RegisterRequestDto {
 
     @NotBlank(message = "Il nome è obbligatorio")
+    @Pattern(regexp = "^[a-zA-ZÀ-ÿ' ]+$", message = "Il nome può contenere solo lettere")
     private String firstName;
 
     @NotBlank(message = "Il cognome è obbligatorio")
+    @Pattern(regexp = "^[a-zA-ZÀ-ÿ' ]+$", message = "Il cognome può contenere solo lettere")
     private String lastName;
 
     @NotNull(message = "La data di nascita è obbligatoria")
@@ -33,7 +36,11 @@ public class RegisterRequestDto {
     private String email;
 
     @NotBlank(message = "La password è obbligatoria")
-    @Size(min = 6, message = "La password deve avere almeno 6 caratteri")
+    @Size(min = 8, message = "La password deve avere almeno 8 caratteri")
+    @Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z0-9]).+$",
+        message = "La password deve contenere almeno una lettera maiuscola, una minuscola, un numero e un carattere speciale"
+    )
     private String password;
 
     @NotBlank(message = "Il sesso è obbligatorio")

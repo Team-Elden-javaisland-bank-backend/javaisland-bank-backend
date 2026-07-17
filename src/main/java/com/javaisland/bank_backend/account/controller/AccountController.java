@@ -1,8 +1,10 @@
 package com.javaisland.bank_backend.account.controller;
 
+import com.javaisland.bank_backend.account.dto.AccountHolderDto;
 import com.javaisland.bank_backend.account.dto.AccountLimitResponseDto;
 import com.javaisland.bank_backend.account.dto.AccountResponseDto;
 import com.javaisland.bank_backend.account.dto.CloseAccountRequestDto;
+import com.javaisland.bank_backend.account.dto.MonthlySummaryDto;
 import com.javaisland.bank_backend.account.dto.OpenAccountRequestDto;
 import com.javaisland.bank_backend.account.dto.SetLimitRequestDto;
 import com.javaisland.bank_backend.account.service.AccountLimitService;
@@ -65,6 +67,18 @@ public class AccountController {
                                                            @PathVariable String accountNumber) {
         Long userId = getUserId(jwt);
         return ResponseEntity.ok(accountService.getAccountDetail(userId, accountNumber));
+    }
+
+    @GetMapping("/{accountNumber}/holder-info")
+    public ResponseEntity<AccountHolderDto> getHolderInfo(@PathVariable String accountNumber) {
+        return ResponseEntity.ok(accountService.getAccountHolderInfo(accountNumber));
+    }
+
+    @GetMapping("/{accountNumber}/monthly-summary")
+    public ResponseEntity<MonthlySummaryDto> getMonthlySummary(@AuthenticationPrincipal Jwt jwt,
+                                                                @PathVariable String accountNumber) {
+        Long userId = getUserId(jwt);
+        return ResponseEntity.ok(accountService.getMonthlySummary(userId, accountNumber));
     }
 
     @GetMapping("/{accountNumber}/limits")
