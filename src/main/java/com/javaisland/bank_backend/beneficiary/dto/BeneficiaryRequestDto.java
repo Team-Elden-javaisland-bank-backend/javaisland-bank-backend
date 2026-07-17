@@ -13,4 +13,7 @@ public class BeneficiaryRequestDto {
 
     @NotBlank(message = "Destination account number is required")
     private String destinationAccountNumber;
+
+    @Size(max = 200)
+    private String destinationHolderName;
 }

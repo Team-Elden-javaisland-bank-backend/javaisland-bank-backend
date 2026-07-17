@@ -14,5 +14,6 @@ public class BeneficiaryResponseDto {
     private Long id;
     private String nickname;
     private String destinationAccountNumber;
+    private String destinationHolderName;
     private LocalDateTime createdAt;
 }

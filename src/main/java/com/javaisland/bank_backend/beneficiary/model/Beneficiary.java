@@ -29,6 +29,9 @@ public class Beneficiary {
     @Column(name = "destination_account_number", nullable = false, length = 50)
     private String destinationAccountNumber;
 
+    @Column(name = "destination_holder_name", length = 200)
+    private String destinationHolderName;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

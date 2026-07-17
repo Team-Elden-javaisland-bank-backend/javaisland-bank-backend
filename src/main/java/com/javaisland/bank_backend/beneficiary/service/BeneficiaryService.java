@@ -47,6 +47,7 @@ public class BeneficiaryService {
         beneficiary.setUser(user);
         beneficiary.setNickname(request.getNickname());
         beneficiary.setDestinationAccountNumber(request.getDestinationAccountNumber());
+        beneficiary.setDestinationHolderName(request.getDestinationHolderName());
 
         return mapToDto(beneficiaryRepository.save(beneficiary));
     }
@@ -92,6 +93,7 @@ public class BeneficiaryService {
                 .id(b.getId())
                 .nickname(b.getNickname())
                 .destinationAccountNumber(b.getDestinationAccountNumber())
+                .destinationHolderName(b.getDestinationHolderName())
                 .createdAt(b.getCreatedAt())
                 .build();
     }
