@@ -1,8 +1,12 @@
 package com.javaisland.bank_backend.employee.controller;
 
-import com.javaisland.bank_backend.account.dto.EmployeeUserDetailDto;
+import com.javaisland.bank_backend.account.dto.AccountLimitResponseDto;
 import com.javaisland.bank_backend.account.dto.AccountResponseDto;
+import com.javaisland.bank_backend.account.dto.EmployeeUserDetailDto;
+import com.javaisland.bank_backend.account.dto.SetLimitRequestDto;
+import com.javaisland.bank_backend.account.service.AccountLimitService;
 import com.javaisland.bank_backend.account.service.AccountService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,6 +21,7 @@ import java.util.List;
 public class EmployeeAccountController {
 
     private final AccountService accountService;
+    private final AccountLimitService accountLimitService;
 
     @GetMapping
     public ResponseEntity<List<AccountResponseDto>> listAccounts(
@@ -74,5 +79,17 @@ public class EmployeeAccountController {
     @GetMapping("/{accountNumber}/user-detail")
     public ResponseEntity<EmployeeUserDetailDto> getUserDetail(@PathVariable String accountNumber) {
         return ResponseEntity.ok(accountService.getEmployeeUserDetail(accountNumber));
+    }
+
+    @GetMapping("/{accountNumber}/limits")
+    public ResponseEntity<List<AccountLimitResponseDto>> listLimits(@PathVariable String accountNumber) {
+        return ResponseEntity.ok(accountLimitService.getLimits(accountNumber));
+    }
+
+    @PutMapping("/{accountNumber}/limits/{limitType}")
+    public ResponseEntity<AccountLimitResponseDto> setLimit(@PathVariable String accountNumber,
+                                                             @PathVariable String limitType,
+                                                             @Valid @RequestBody SetLimitRequestDto request) {
+        return ResponseEntity.ok(accountLimitService.setLimit(accountNumber, limitType, request));
     }
 }

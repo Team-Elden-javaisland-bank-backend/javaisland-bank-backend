@@ -19,7 +19,7 @@ Table users {
   last_name varchar(100) [not null]
   birth_date date [not null]
   email varchar(150) [unique, not null]
-  password varchar(64) [not null]
+  password varchar(64)
   plain_password varchar(100)
   role_type_id integer [not null, ref: > role_types.id]
   status_id integer [not null, ref: > user_statuses.id]
@@ -118,7 +118,6 @@ Table beneficiaries {
   id bigint [primary key, increment]
   user_id bigint [not null, ref: > users.id]
   destination_account_number varchar(50) [not null]
-  destination_holder_name varchar(200)
   nickname varchar(100) [not null]
   created_at timestamp
   // Composite unique: (user_id, destination_account_number)
@@ -129,4 +128,15 @@ Table saved_beneficiaries {
   beneficiary_name varchar(150) [not null]
   account_number varchar(50) [not null]
   user_id integer [not null, ref: > users.id]
+}
+
+Table audit_logs {
+  id bigint [primary key, increment]
+  entity_type varchar(50) [not null]
+  entity_id bigint
+  action varchar(50) [not null]
+  performed_by varchar(100) [not null]
+  performed_by_user_id bigint
+  details varchar(500)
+  performed_at timestamp [default: `now()`]
 }

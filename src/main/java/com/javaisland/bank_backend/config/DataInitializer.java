@@ -72,6 +72,7 @@ public class DataInitializer implements CommandLineRunner {
         seedLimitTypes();
         seedTransactionTypes();
         seedTransactionStatuses();
+        seedPreconfiguredCustomers();
     }
 
     private void seedUserStatuses() {
@@ -176,6 +177,13 @@ public class DataInitializer implements CommandLineRunner {
         customer1.setPassword(hashedPass);
         customer1.setRoleType(roleC);
         customer1.setStatus(activeStatus);
+        customer1.setGender("M");
+        customer1.setFiscalCode("RSSMRA85C15H501Z");
+        customer1.setPhone("+393331234567");
+        customer1.setBirthPlace("Roma");
+        customer1.setBirthProvince("RM");
+        customer1.setResidence("Via Roma 1, Roma RM");
+        customer1.setProfession("Ingegnere");
         customer1 = userRepository.save(customer1);
         Account acc1 = new Account();
         acc1.setAccountNumber("IT" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 15).toUpperCase());
@@ -193,6 +201,13 @@ public class DataInitializer implements CommandLineRunner {
         customer2.setPassword(hashedPass);
         customer2.setRoleType(roleC);
         customer2.setStatus(activeStatus);
+        customer2.setGender("F");
+        customer2.setFiscalCode("BNCRLU90M42H501Y");
+        customer2.setPhone("+393337654321");
+        customer2.setBirthPlace("Milano");
+        customer2.setBirthProvince("MI");
+        customer2.setResidence("Via Torino 5, Milano MI");
+        customer2.setProfession("Avvocatessa");
         customer2 = userRepository.save(customer2);
         Account acc2a = new Account();
         acc2a.setAccountNumber("IT" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 15).toUpperCase());
@@ -211,11 +226,18 @@ public class DataInitializer implements CommandLineRunner {
         employee.setFirstName("Admin");
         employee.setLastName("Bank");
         employee.setBirthDate(java.time.LocalDate.of(1980, 1, 1));
-        employee.setEmail("admin@javaisland.com");
-        employee.setUsername("admin");
+        employee.setEmail("admin@eldenbank.com");
+        employee.setUsername("admin@eldenbank.com");
         employee.setPassword(hashedPass);
         employee.setRoleType(roleD);
         employee.setStatus(activeStatus);
+        employee.setGender("M");
+        employee.setFiscalCode("BNKDMN80A01H501X");
+        employee.setPhone("+393330000000");
+        employee.setBirthPlace("Roma");
+        employee.setBirthProvince("RM");
+        employee.setResidence("Via della Sede 1, Roma RM");
+        employee.setProfession("Direttore");
         userRepository.save(employee);
     }
 }
