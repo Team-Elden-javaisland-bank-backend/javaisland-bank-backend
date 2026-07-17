@@ -86,9 +86,13 @@ public class DataInitializer implements CommandLineRunner {
         if (roleTypeRepository.count() == 0) {
             roleTypeRepository.save(new RoleType(null, "C"));
             roleTypeRepository.save(new RoleType(null, "D"));
+            roleTypeRepository.save(new RoleType(null, "A"));
         } else {
             roleTypeRepository.findByRoleName("CUSTOMER").ifPresent(r -> { r.setRoleName("C"); roleTypeRepository.save(r); });
             roleTypeRepository.findByRoleName("EMPLOYEE").ifPresent(r -> { r.setRoleName("D"); roleTypeRepository.save(r); });
+            if (roleTypeRepository.findByRoleName("A").isEmpty()) {
+                roleTypeRepository.save(new RoleType(null, "A"));
+            }
         }
     }
 

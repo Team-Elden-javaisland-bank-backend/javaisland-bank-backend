@@ -37,8 +37,12 @@ class BeneficiaryServiceTest {
         dto.setNickname("Mamma");
         dto.setDestinationAccountNumber("IT999");
 
+        var owner = new User();
+        owner.setId(2L);
+
         var account = new Account();
         account.setStatusId(AccountStatus.ACTIVE);
+        account.setUser(owner);
 
         var user = new User();
         user.setId(1L);
@@ -74,8 +78,12 @@ class BeneficiaryServiceTest {
         var dto = new BeneficiaryRequestDto();
         dto.setDestinationAccountNumber("IT999");
 
+        var user = new User();
+        user.setId(2L);
+
         var account = new Account();
         account.setStatusId(AccountStatus.INACTIVE);
+        account.setUser(user);
 
         when(accountRepository.findByAccountNumber("IT999")).thenReturn(Optional.of(account));
 
@@ -87,8 +95,12 @@ class BeneficiaryServiceTest {
         var dto = new BeneficiaryRequestDto();
         dto.setDestinationAccountNumber("IT999");
 
+        var user = new User();
+        user.setId(2L);
+
         var account = new Account();
         account.setStatusId(AccountStatus.ACTIVE);
+        account.setUser(user);
 
         when(accountRepository.findByAccountNumber("IT999")).thenReturn(Optional.of(account));
         when(beneficiaryRepository.existsByUserIdAndDestinationAccountNumber(1L, "IT999")).thenReturn(true);

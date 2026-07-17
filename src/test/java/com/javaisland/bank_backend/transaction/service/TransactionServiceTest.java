@@ -22,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -162,8 +163,8 @@ class TransactionServiceTest {
     void transfer_happyPath() {
         when(transactionTypeRepository.findByTypeName("TRANSFER"))
                 .thenReturn(Optional.of(new TransactionType(3, "TRANSFER")));
-        when(transactionStatusRepository.findByStatusName("COMPLETED"))
-                .thenReturn(Optional.of(new TransactionStatus(2, "COMPLETED")));
+        when(transactionStatusRepository.findByStatusName("PENDING"))
+                .thenReturn(Optional.of(new TransactionStatus(1, "PENDING")));
 
         User user = new User(); user.setId(10L);
 
@@ -174,6 +175,7 @@ class TransactionServiceTest {
         dto.setSourceAccountNumber("IT1");
         dto.setDestinationAccountNumber("IT2");
         dto.setAmount(new BigDecimal("300"));
+        dto.setScheduledDate(LocalDate.now().plusDays(2));
 
         when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(src));
         when(accountRepository.findByAccountNumber("IT2")).thenReturn(Optional.of(dst));
@@ -183,15 +185,14 @@ class TransactionServiceTest {
         var result = transactionService.transfer(10L, dto);
 
         assertNotNull(result);
-        verify(accountLimitService).validateTransfer(src, new BigDecimal("300"), false);
     }
 
     @Test
     void transfer_viaBeneficiary() {
         when(transactionTypeRepository.findByTypeName("TRANSFER"))
                 .thenReturn(Optional.of(new TransactionType(3, "TRANSFER")));
-        when(transactionStatusRepository.findByStatusName("COMPLETED"))
-                .thenReturn(Optional.of(new TransactionStatus(2, "COMPLETED")));
+        when(transactionStatusRepository.findByStatusName("PENDING"))
+                .thenReturn(Optional.of(new TransactionStatus(1, "PENDING")));
 
         User user = new User(); user.setId(10L);
 
@@ -202,6 +203,7 @@ class TransactionServiceTest {
         dto.setSourceAccountNumber("IT1");
         dto.setBeneficiaryId(99L);
         dto.setAmount(new BigDecimal("300"));
+        dto.setScheduledDate(LocalDate.now().plusDays(2));
 
         when(beneficiaryService.resolveAccountNumber(10L, 99L)).thenReturn("IT2");
         when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(src));

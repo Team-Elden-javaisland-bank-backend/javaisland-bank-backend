@@ -1,5 +1,6 @@
 package com.javaisland.bank_backend.account.service;
 
+import com.javaisland.bank_backend.account.dto.AccountHolderDto;
 import com.javaisland.bank_backend.account.dto.AccountResponseDto;
 import com.javaisland.bank_backend.account.dto.CloseAccountRequestDto;
 import com.javaisland.bank_backend.account.dto.EmployeeUserDetailDto;
@@ -7,6 +8,7 @@ import com.javaisland.bank_backend.account.dto.OpenAccountRequestDto;
 import com.javaisland.bank_backend.account.model.Account;
 import com.javaisland.bank_backend.account.model.AccountStatus;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
+import com.javaisland.bank_backend.audit.service.AuditLogService;
 import com.javaisland.bank_backend.card.repository.CardRepository;
 import com.javaisland.bank_backend.card.service.CardService;
 import com.javaisland.bank_backend.exception.ApiBankException;
@@ -19,7 +21,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.javaisland.bank_backend.account.dto.MonthlySummaryDto;
+import com.javaisland.bank_backend.transaction.repository.TransactionRepository;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -36,6 +42,8 @@ public class AccountService {
     private final UserRepository userRepository;
     private final CardService cardService;
     private final CardRepository cardRepository;
+    private final TransactionRepository transactionRepository;
+    private final AuditLogService auditLogService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Account createInitialAccountForUser(User user) {
@@ -95,6 +103,8 @@ public class AccountService {
         String holderName = account.getUser().getFirstName() + " " + account.getUser().getLastName();
         cardService.issueDebitCard(account.getId(), holderName, "ACTIVE");
         cardService.activateCardsByAccountId(account.getId());
+        auditLogService.log("ACCOUNT", account.getId(), "ACTIVATE", "system",
+                "Conto attivato: " + accountNumber);
         log.info("Account {} activated by employee, card issued and activated", accountNumber);
     }
 
@@ -115,6 +125,8 @@ public class AccountService {
         account.setInitialAmount(null);
         accountRepository.save(account);
         cardService.deleteCardsByAccountId(account.getId());
+        auditLogService.log("ACCOUNT", account.getId(), "REJECT", "system",
+                "Richiesta conto rifiutata: " + accountNumber);
         log.info("Account {} request rejected by employee — CLOSED, cards deleted", accountNumber);
     }
 
@@ -165,6 +177,8 @@ public class AccountService {
         }
         account.setStatusId(AccountStatus.FROZEN);
         accountRepository.save(account);
+        auditLogService.log("ACCOUNT", account.getId(), "FREEZE", "system",
+                "Conto congelato: " + accountNumber);
         log.info("Account {} frozen by employee", accountNumber);
     }
 
@@ -176,6 +190,8 @@ public class AccountService {
         }
         account.setStatusId(AccountStatus.ACTIVE);
         accountRepository.save(account);
+        auditLogService.log("ACCOUNT", account.getId(), "UNFREEZE", "system",
+                "Conto scongelato: " + accountNumber);
         log.info("Account {} unfrozen by employee", accountNumber);
     }
 
@@ -255,6 +271,40 @@ public class AccountService {
     }
 
     @Transactional(readOnly = true)
+    public MonthlySummaryDto getMonthlySummary(Long userId, String accountNumber) {
+        User user = getUserOrThrow(userId);
+        Account account = getAccountOrThrow(accountNumber);
+        assertOwnership(account, user);
+
+        LocalDate today = LocalDate.now();
+        LocalDate startOfMonth = today.withDayOfMonth(1);
+        LocalDate endOfMonth = today.withDayOfMonth(today.lengthOfMonth());
+        LocalDateTime start = startOfMonth.atStartOfDay();
+        LocalDateTime end = endOfMonth.atTime(23, 59, 59);
+
+        Long accountId = account.getId();
+        BigDecimal expenses = transactionRepository.sumOutflowByAccountBetween(accountId, start, end);
+        BigDecimal income = transactionRepository.sumInflowByAccountBetween(accountId, start, end);
+        Long movementCount = transactionRepository.countByAccountBetween(accountId, start, end);
+
+        BigDecimal previousBalance = account.getBalance().subtract(income).add(expenses);
+        BigDecimal changePercentage = BigDecimal.ZERO;
+        if (previousBalance.compareTo(BigDecimal.ZERO) != 0) {
+            changePercentage = account.getBalance()
+                    .subtract(previousBalance)
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(previousBalance.abs(), 1, RoundingMode.HALF_UP);
+        }
+
+        return MonthlySummaryDto.builder()
+                .monthlyExpenses(expenses)
+                .monthlyIncome(income)
+                .movementCount(movementCount)
+                .balanceChangePercentage(changePercentage)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
     public AccountResponseDto getAccountDetail(Long userId, String accountNumber) {
         User user = getUserOrThrow(userId);
         Account account = getAccountOrThrow(accountNumber);
@@ -265,6 +315,17 @@ public class AccountService {
     @Transactional(readOnly = true)
     public AccountResponseDto getAccountDetailAsEmployee(String accountNumber) {
         return toDto(getAccountOrThrow(accountNumber));
+    }
+
+    @Transactional(readOnly = true)
+    public AccountHolderDto getAccountHolderInfo(String accountNumber) {
+        Account account = getAccountOrThrow(accountNumber);
+        User user = account.getUser();
+        return AccountHolderDto.builder()
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .accountNumber(account.getAccountNumber())
+                .build();
     }
 
     @Transactional(readOnly = true)

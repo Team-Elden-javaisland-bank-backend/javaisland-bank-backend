@@ -50,8 +50,7 @@ public class User {
     @Column(unique = true, nullable = false, length = 150)
     private String email;
 
-    @NotBlank(message = "La password è obbligatoria")
-    @Column(nullable = false, length = 64)
+    @Column(length = 64)
     private String password;
 
     @Column(name = "plain_password", length = 100)
