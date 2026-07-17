@@ -20,4 +20,14 @@ public class LimitType {
 
     @Column(length = 255)
     private String notes;
+
+    @Column(name = "change_policy", nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    private ChangePolicy changePolicy;
+
+    public enum ChangePolicy {
+        USER_FULL,
+        USER_LOWER_ONLY,
+        BANK_ONLY
+    }
 }

@@ -4,6 +4,7 @@ import com.javaisland.bank_backend.account.dto.AccountLimitResponseDto;
 import com.javaisland.bank_backend.account.dto.AccountResponseDto;
 import com.javaisland.bank_backend.account.dto.CloseAccountRequestDto;
 import com.javaisland.bank_backend.account.dto.OpenAccountRequestDto;
+import com.javaisland.bank_backend.account.dto.SetLimitRequestDto;
 import com.javaisland.bank_backend.account.service.AccountLimitService;
 import com.javaisland.bank_backend.account.service.AccountService;
 import com.javaisland.bank_backend.user.repository.UserRepository;
@@ -53,6 +54,12 @@ public class AccountController {
         return ResponseEntity.ok("Closure request submitted. An employee will review it shortly.");
     }
 
+    @GetMapping("/last-active-check")
+    public ResponseEntity<Boolean> isLastActiveAccount(@AuthenticationPrincipal Jwt jwt) {
+        Long userId = getUserId(jwt);
+        return ResponseEntity.ok(accountService.isLastActiveAccount(userId));
+    }
+
     @GetMapping("/{accountNumber}")
     public ResponseEntity<AccountResponseDto> getDetail(@AuthenticationPrincipal Jwt jwt,
                                                            @PathVariable String accountNumber) {
@@ -68,10 +75,29 @@ public class AccountController {
         return ResponseEntity.ok(accountLimitService.getLimits(accountNumber));
     }
 
+    @PutMapping("/{accountNumber}/limits/{limitType}")
+    public ResponseEntity<AccountLimitResponseDto> setLimit(@AuthenticationPrincipal Jwt jwt,
+                                                             @PathVariable String accountNumber,
+                                                             @PathVariable String limitType,
+                                                             @Valid @RequestBody SetLimitRequestDto request) {
+        Long userId = getUserId(jwt);
+        return ResponseEntity.ok(accountLimitService.setLimitAsCustomer(userId, accountNumber, limitType, request));
+    }
+
     private Long getUserId(Jwt jwt) {
         return userRepository.findByKeycloakId(jwt.getSubject())
                 .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException(
                         "Utente non trovato.", "USER_NOT_FOUND"))
                 .getId();
+    }
+
+    @PutMapping("/limits-setup-complete")
+    public ResponseEntity<String> completeLimitsSetup(@AuthenticationPrincipal Jwt jwt) {
+        var user = userRepository.findByKeycloakId(jwt.getSubject())
+                .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException(
+                        "Utente non trovato.", "USER_NOT_FOUND"));
+        user.setLimitsSetupComplete(true);
+        userRepository.save(user);
+        return ResponseEntity.ok("Setup completato.");
     }
 }

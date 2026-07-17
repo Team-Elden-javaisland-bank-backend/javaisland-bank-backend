@@ -39,7 +39,7 @@ class AccountLimitServiceTest {
     @Test
     void setLimit_createsNewLimit() {
         var account = new Account(); account.setId(1L); account.setAccountNumber("IT123");
-        var limitType = new LimitType(1, "DAILY_TRANSFER", "desc");
+        var limitType = new LimitType(1, "DAILY_TRANSFER", "desc", LimitType.ChangePolicy.BANK_ONLY);
         var request = new SetLimitRequestDto(); request.setMaxAmount(new BigDecimal("5000"));
 
         when(accountRepository.findByAccountNumber("IT123")).thenReturn(Optional.of(account));
@@ -56,7 +56,7 @@ class AccountLimitServiceTest {
     @Test
     void setLimit_updatesExisting() {
         var account = new Account(); account.setId(1L); account.setAccountNumber("IT123");
-        var limitType = new LimitType(1, "DAILY_TRANSFER", "desc");
+        var limitType = new LimitType(1, "DAILY_TRANSFER", "desc", LimitType.ChangePolicy.BANK_ONLY);
         var existing = new AccountLimit(); existing.setMaxAmount(new BigDecimal("1000"));
         var request = new SetLimitRequestDto(); request.setMaxAmount(new BigDecimal("5000"));
 
@@ -95,7 +95,7 @@ class AccountLimitServiceTest {
         var account = new Account(); account.setId(1L); account.setAccountNumber("IT123");
         var limit = new AccountLimit();
         limit.setMaxAmount(new BigDecimal("5000"));
-        var lt = new LimitType(1, "DAILY_TRANSFER", null);
+        var lt = new LimitType(1, "DAILY_TRANSFER", null, LimitType.ChangePolicy.BANK_ONLY);
         limit.setLimitType(lt);
 
         when(accountRepository.findByAccountNumber("IT123")).thenReturn(Optional.of(account));
@@ -118,13 +118,13 @@ class AccountLimitServiceTest {
         var account = new Account(); account.setId(1L);
         var limit = new AccountLimit();
         limit.setMaxAmount(new BigDecimal("1000"));
-        var lt = new LimitType(1, "SINGLE_TRANSFER", null);
+        var lt = new LimitType(1, "SINGLE_TRANSFER", null, LimitType.ChangePolicy.BANK_ONLY);
         limit.setLimitType(lt);
 
         when(accountLimitRepository.findByAccountId(1L)).thenReturn(List.of(limit));
 
         assertThrows(ApiBankException.class, () ->
-                accountLimitService.validateTransfer(account, new BigDecimal("1500")));
+                accountLimitService.validateTransfer(account, new BigDecimal("1500"), false));
     }
 
     @Test
@@ -132,7 +132,7 @@ class AccountLimitServiceTest {
         var account = new Account(); account.setId(1L);
         var limit = new AccountLimit();
         limit.setMaxAmount(new BigDecimal("2000"));
-        var lt = new LimitType(1, "DAILY_TRANSFER", null);
+        var lt = new LimitType(1, "DAILY_TRANSFER", null, LimitType.ChangePolicy.BANK_ONLY);
         limit.setLimitType(lt);
 
         when(accountLimitRepository.findByAccountId(1L)).thenReturn(List.of(limit));
@@ -141,7 +141,7 @@ class AccountLimitServiceTest {
                 .thenReturn(new BigDecimal("1500"));
 
         assertThrows(ApiBankException.class, () ->
-                accountLimitService.validateTransfer(account, new BigDecimal("600")));
+                accountLimitService.validateTransfer(account, new BigDecimal("600"), false));
     }
 
     @Test
@@ -149,7 +149,7 @@ class AccountLimitServiceTest {
         var account = new Account(); account.setId(1L);
         var limit = new AccountLimit();
         limit.setMaxAmount(new BigDecimal("10000"));
-        var lt = new LimitType(1, "MONTHLY_TRANSFER", null);
+        var lt = new LimitType(1, "MONTHLY_TRANSFER", null, LimitType.ChangePolicy.BANK_ONLY);
         limit.setLimitType(lt);
 
         when(accountLimitRepository.findByAccountId(1L)).thenReturn(List.of(limit));
@@ -158,7 +158,7 @@ class AccountLimitServiceTest {
                 .thenReturn(new BigDecimal("9500"));
 
         assertThrows(ApiBankException.class, () ->
-                accountLimitService.validateTransfer(account, new BigDecimal("600")));
+                accountLimitService.validateTransfer(account, new BigDecimal("600"), false));
     }
 
     @Test
@@ -167,15 +167,15 @@ class AccountLimitServiceTest {
 
         var singleLimit = new AccountLimit();
         singleLimit.setMaxAmount(new BigDecimal("5000"));
-        singleLimit.setLimitType(new LimitType(1, "SINGLE_TRANSFER", null));
+        singleLimit.setLimitType(new LimitType(1, "SINGLE_TRANSFER", null, LimitType.ChangePolicy.BANK_ONLY));
 
         var dailyLimit = new AccountLimit();
         dailyLimit.setMaxAmount(new BigDecimal("2000"));
-        dailyLimit.setLimitType(new LimitType(2, "DAILY_TRANSFER", null));
+        dailyLimit.setLimitType(new LimitType(2, "DAILY_TRANSFER", null, LimitType.ChangePolicy.BANK_ONLY));
 
         var monthlyLimit = new AccountLimit();
         monthlyLimit.setMaxAmount(new BigDecimal("10000"));
-        monthlyLimit.setLimitType(new LimitType(3, "MONTHLY_TRANSFER", null));
+        monthlyLimit.setLimitType(new LimitType(3, "MONTHLY_TRANSFER", null, LimitType.ChangePolicy.BANK_ONLY));
 
         when(accountLimitRepository.findByAccountId(1L)).thenReturn(List.of(singleLimit, dailyLimit, monthlyLimit));
         when(transactionRepository.sumAmountBySourceAccountAndTypeAndStatusBetween(
@@ -183,7 +183,7 @@ class AccountLimitServiceTest {
                 .thenReturn(BigDecimal.ZERO);
 
         assertDoesNotThrow(() ->
-                accountLimitService.validateTransfer(account, new BigDecimal("500")));
+                accountLimitService.validateTransfer(account, new BigDecimal("500"), false));
     }
 
     @Test
@@ -192,6 +192,6 @@ class AccountLimitServiceTest {
         when(accountLimitRepository.findByAccountId(1L)).thenReturn(List.of());
 
         assertDoesNotThrow(() ->
-                accountLimitService.validateTransfer(account, new BigDecimal("99999")));
+                accountLimitService.validateTransfer(account, new BigDecimal("99999"), false));
     }
 }

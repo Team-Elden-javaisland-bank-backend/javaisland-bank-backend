@@ -1,142 +1,132 @@
-// Database Schema Javaisland Bank - stato attuale codice
-
-// ----------------------------------------------------------------------
-// TABELLE DI DOMINIO (LOOKUP)
-// ----------------------------------------------------------------------
-
-Table user_statuses {
-  id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]  // 'PENDING', 'ACTIVE', 'ANNULLED', 'SUSPENDED'
-}
+// JAVAISLAND BANK - Database Schema
+// Visualizable on dbdiagram.io
 
 Table role_types {
   id integer [primary key, increment]
-  role_name varchar(30) [unique, not null]    // 'CUSTOMER', 'EMPLOYEE'
+  role_name varchar(30) [unique, not null]
 }
 
-Table account_statuses {
+Table user_statuses {
   id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]  // 'INACTIVE', 'ACTIVE', 'FROZEN', 'CLOSED'
+  user_status varchar(30) [unique, not null]
 }
-
-Table limit_types {
-  id integer [primary key, increment]
-  limit_name varchar(30) [unique, not null]   // 'DAILY_TRANSFER', 'SINGLE_TRANSFER', 'INSTANT_TRANSFER_SINGLE', 'MONTHLY_TRANSFER', 'ATM_WITHDRAWAL', 'POS_SPENDING'
-  notes varchar(255)
-}
-
-Table card_types {
-  id integer [primary key, increment]
-  type_name varchar(30) [unique, not null]    // 'DEBIT', 'CREDIT'
-}
-
-Table card_statuses {
-  id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]  // 'INACTIVE', 'ACTIVE', 'BLOCKED'
-}
-
-Table transaction_types {
-  id integer [primary key, increment]
-  type_name varchar(30) [unique, not null]    // 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER', 'INITIAL_TRANSFER'
-}
-
-Table transaction_statuses {
-  id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]  // 'PENDING', 'COMPLETED', 'FAILED', 'REJECTED'
-}
-
-// ----------------------------------------------------------------------
-// TABELLE PRINCIPALI
-// ----------------------------------------------------------------------
 
 Table users {
-  id integer [primary key, increment]
-  keycloak_id varchar(255) [unique]                    // null prima della validazione da impiegato
+  id bigint [primary key, increment]
+  keycloak_id varchar(255) [unique]
   username varchar(50) [unique, not null]
   first_name varchar(100) [not null]
   last_name varchar(100) [not null]
   birth_date date [not null]
   email varchar(150) [unique, not null]
-  password varchar(64) [not null]                      // SHA-256 hash
-  plain_password varchar(100)                          // solo in fase di registrazione, non persistito
+  password varchar(64) [not null]
+  plain_password varchar(100)
+  role_type_id integer [not null, ref: > role_types.id]
+  status_id integer [not null, ref: > user_statuses.id]
   branch_code varchar(20)
-  status_id integer [not null]
-  role_type_id integer [not null]
-  created_at timestamp
+  profession varchar(100)
+  gender varchar(1)
+  fiscal_code varchar(16) [unique]
+  phone varchar(20)
+  residence varchar(200)
+  birth_place varchar(100)
+  birth_province varchar(2)
+  created_at timestamp [default: `now()`]
+  limits_setup_complete boolean [not null, default: false]
+}
+
+Table account_statuses {
+  id integer [primary key, increment]
+  status_name varchar(30) [unique, not null]
 }
 
 Table accounts {
-  id integer [primary key, increment]
-  account_number varchar(50) [unique, not null]        // IT + UUID
-  balance decimal(15,2) [default: 0.00]
-  status_id integer [not null]                         // 1=INACTIVE, 2=ACTIVE, 3=FROZEN, 4=CLOSED
-  user_id integer [not null]
-  created_at timestamp
+  id bigint [primary key, increment]
+  account_number varchar(50) [unique, not null]
+  balance numeric(15,2) [default: 0.00]
+  status_id integer [not null, ref: > account_statuses.id]
+  user_id bigint [not null, ref: > users.id]
+  created_at timestamp [default: `now()`]
   closed_at timestamp
-  version integer [default: 0]                         // optimistic locking
+  source_account_number varchar(50)
+  initial_amount numeric(15,2)
+  version bigint
 }
 
-Table cards {
+Table limit_types {
   id integer [primary key, increment]
-  card_number varchar(16) [unique, not null]
-  holder_name varchar(150) [not null]
-  expiration_date date [not null]
-  cvv varchar(3) [not null]
-  status_id integer                                    // FK → card_statuses, nullable
-  card_type_id integer [not null]
-  account_id integer [not null]
+  limit_name varchar(30) [unique, not null]
+  notes varchar(255)
+  change_policy varchar(20) [not null, default: `'BANK_ONLY'`]
 }
 
 Table account_limits {
-  id integer [primary key, increment]
-  account_id integer [not null]
-  limit_type_id integer [not null]
-  max_amount decimal(15,2) [not null]                // soglia massima (es. 5000.00)
-  updated_at timestamp
-  indexes {
-    (account_id, limit_type_id) [unique]             // un limite per tipo per conto
-  }
+  id bigint [primary key, increment]
+  account_id bigint [not null, ref: > accounts.id]
+  limit_type_id integer [not null, ref: > limit_types.id]
+  max_amount numeric(15,2) [not null]
+  updated_at timestamp [default: `now()`]
+  // Composite unique: (account_id, limit_type_id)
 }
 
-Table beneficiaries {
+Table card_types {
   id integer [primary key, increment]
-  nickname varchar(100) [not null]
-  destination_account_number varchar(50) [not null]
-  user_id integer [not null]
-  created_at timestamp
-  indexes {
-    (user_id, destination_account_number) [unique]     // un beneficiario per conto
-  }
+  type_name varchar(30) [unique, not null]
+}
+
+Table card_statuses {
+  id integer [primary key, increment]
+  status_name varchar(30) [unique, not null]
+}
+
+Table cards {
+  id bigint [primary key, increment]
+  card_number varchar(16) [unique, not null]
+  card_type_id integer [not null, ref: > card_types.id]
+  holder_name varchar(150) [not null]
+  expiration_date date [not null]
+  cvv varchar(3) [not null]
+  status_id integer [ref: > card_statuses.id]
+  account_id bigint [not null, ref: > accounts.id]
+}
+
+Table transaction_types {
+  id integer [primary key, increment]
+  type_name varchar(30) [unique, not null]
+}
+
+Table transaction_statuses {
+  id integer [primary key, increment]
+  status_name varchar(30) [unique, not null]
 }
 
 Table transactions {
-  id integer [primary key, increment]
-  amount decimal(15,2) [not null]
-  type_id integer [not null]
-  status_id integer [not null]
+  id bigint [primary key, increment]
+  amount numeric(15,2) [not null]
+  type_id integer [not null, ref: > transaction_types.id]
+  status_id integer [not null, ref: > transaction_statuses.id]
   description varchar(255)
-  source_balance_after decimal(15,2)
-  dest_balance_after decimal(15,2)
-  created_at timestamp
-  source_account_id integer                            // null se DEPOSIT
-  destination_account_id integer                       // null se WITHDRAWAL
+  source_balance_after numeric(15,2)
+  dest_balance_after numeric(15,2)
+  created_at timestamp [default: `now()`]
+  source_account_id bigint [ref: > accounts.id]
+  destination_account_id bigint [ref: > accounts.id]
+  scheduled_date timestamp
 }
 
-// ----------------------------------------------------------------------
-// RELAZIONI
-// ----------------------------------------------------------------------
+Table beneficiaries {
+  id bigint [primary key, increment]
+  user_id bigint [not null, ref: > users.id]
+  destination_account_number varchar(50) [not null]
+  destination_holder_name varchar(200)
+  nickname varchar(100) [not null]
+  created_at timestamp
+  // Composite unique: (user_id, destination_account_number)
+}
 
-Ref: users.status_id > user_statuses.id
-Ref: users.role_type_id > role_types.id
-Ref: accounts.status_id > account_statuses.id
-Ref: accounts.user_id > users.id
-Ref: cards.card_type_id > card_types.id
-Ref: cards.status_id > card_statuses.id
-Ref: cards.account_id > accounts.id
-Ref: account_limits.account_id > accounts.id
-Ref: account_limits.limit_type_id > limit_types.id
-Ref: beneficiaries.user_id > users.id
-Ref: transactions.type_id > transaction_types.id
-Ref: transactions.status_id > transaction_statuses.id
-Ref: transactions.source_account_id > accounts.id
-Ref: transactions.destination_account_id > accounts.id
+Table saved_beneficiaries {
+  id integer [primary key, increment]
+  beneficiary_name varchar(150) [not null]
+  account_number varchar(50) [not null]
+  user_id integer [not null, ref: > users.id]
+}

@@ -20,6 +20,6 @@ public class UserStatus {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(name = "status_name", unique = true, nullable = false, length = 30)
-    private String statusName;
+    @Column(name = "user_status", unique = true, nullable = false, length = 30)
+    private String userStatus;
 }

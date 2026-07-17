@@ -116,28 +116,40 @@ public class DataInitializer implements CommandLineRunner {
 
     private void seedLimitTypes() {
         if (limitTypeRepository.count() > 0) return;
-        limitTypeRepository.save(new LimitType(null, "DAILY_TRANSFER", "Maximum cumulative transfer amount per day"));
-        limitTypeRepository.save(new LimitType(null, "SINGLE_TRANSFER", "Maximum amount per single transfer"));
-        limitTypeRepository.save(new LimitType(null, "INSTANT_TRANSFER_SINGLE", "Maximum amount per single instant transfer"));
-        limitTypeRepository.save(new LimitType(null, "MONTHLY_TRANSFER", "Maximum cumulative transfer amount per month"));
-        limitTypeRepository.save(new LimitType(null, "ATM_WITHDRAWAL", "Maximum ATM withdrawal per transaction"));
-        limitTypeRepository.save(new LimitType(null, "POS_SPENDING", "Maximum POS spending per transaction"));
+        limitTypeRepository.save(new LimitType(null, "DAILY_TRANSFER", "Maximum cumulative transfer amount per day", LimitType.ChangePolicy.USER_LOWER_ONLY));
+        limitTypeRepository.save(new LimitType(null, "SINGLE_TRANSFER", "Maximum amount per single transfer", LimitType.ChangePolicy.USER_LOWER_ONLY));
+        limitTypeRepository.save(new LimitType(null, "INSTANT_TRANSFER_SINGLE", "Maximum amount per single instant transfer", LimitType.ChangePolicy.BANK_ONLY));
+        limitTypeRepository.save(new LimitType(null, "MONTHLY_TRANSFER", "Maximum cumulative transfer amount per month", LimitType.ChangePolicy.BANK_ONLY));
+        limitTypeRepository.save(new LimitType(null, "ATM_WITHDRAWAL", "Maximum ATM withdrawal per transaction", LimitType.ChangePolicy.USER_FULL));
+        limitTypeRepository.save(new LimitType(null, "POS_SPENDING", "Maximum POS spending per transaction", LimitType.ChangePolicy.USER_FULL));
     }
 
     private void seedTransactionTypes() {
-        if (transactionTypeRepository.count() > 0) return;
-        transactionTypeRepository.save(new TransactionType(null, "DEPOSIT"));
-        transactionTypeRepository.save(new TransactionType(null, "WITHDRAWAL"));
-        transactionTypeRepository.save(new TransactionType(null, "TRANSFER"));
-        transactionTypeRepository.save(new TransactionType(null, "INITIAL_TRANSFER"));
+        seedIfMissing(transactionTypeRepository, "DEPOSIT");
+        seedIfMissing(transactionTypeRepository, "WITHDRAWAL");
+        seedIfMissing(transactionTypeRepository, "TRANSFER");
+        seedIfMissing(transactionTypeRepository, "INITIAL_TRANSFER");
+        seedIfMissing(transactionTypeRepository, "INSTANT_TRANSFER");
+    }
+
+    private void seedIfMissing(TransactionTypeRepository repo, String name) {
+        if (repo.findByTypeName(name).isEmpty()) {
+            repo.save(new TransactionType(null, name));
+        }
     }
 
     private void seedTransactionStatuses() {
-        if (transactionStatusRepository.count() > 0) return;
-        transactionStatusRepository.save(new TransactionStatus(null, "PENDING"));
-        transactionStatusRepository.save(new TransactionStatus(null, "COMPLETED"));
-        transactionStatusRepository.save(new TransactionStatus(null, "FAILED"));
-        transactionStatusRepository.save(new TransactionStatus(null, "REJECTED"));
+        seedIfMissing(transactionStatusRepository, "PENDING");
+        seedIfMissing(transactionStatusRepository, "COMPLETED");
+        seedIfMissing(transactionStatusRepository, "FAILED");
+        seedIfMissing(transactionStatusRepository, "REJECTED");
+        seedIfMissing(transactionStatusRepository, "CANCELLED");
+    }
+
+    private void seedIfMissing(TransactionStatusRepository repo, String name) {
+        if (repo.findByStatusName(name).isEmpty()) {
+            repo.save(new TransactionStatus(null, name));
+        }
     }
 
     private void seedPreconfiguredCustomers() {
@@ -147,7 +159,7 @@ public class DataInitializer implements CommandLineRunner {
                 .orElseThrow(() -> new RuntimeException("Role C not found"));
         var roleD = roleTypeRepository.findByRoleName("D")
                 .orElseThrow(() -> new RuntimeException("Role D not found"));
-        var activeStatus = userStatusRepository.findByStatusName("ACTIVE")
+        var activeStatus = userStatusRepository.findByUserStatus("ACTIVE")
                 .orElseThrow(() -> new RuntimeException("Status ACTIVE not found"));
         String hashedPass = RegistrationService.hashPassword("password123");
 

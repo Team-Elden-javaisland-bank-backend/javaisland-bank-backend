@@ -38,6 +38,12 @@ public class Account {
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
+    @Column(name = "source_account_number", length = 50)
+    private String sourceAccountNumber;
+
+    @Column(name = "initial_amount", precision = 15, scale = 2)
+    private BigDecimal initialAmount;
+
     @Version
     private Long version = 0L;
 }

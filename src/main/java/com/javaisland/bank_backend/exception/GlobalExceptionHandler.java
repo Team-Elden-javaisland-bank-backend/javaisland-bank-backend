@@ -3,6 +3,7 @@ package com.javaisland.bank_backend.exception;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -26,7 +27,9 @@ public class GlobalExceptionHandler {
         log.warn("Business rule violation: [{}] {}", ex.getErrorCode(), ex.getMessage());
         ErrorResponseDto body = new ErrorResponseDto(
                 LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(), ex.getErrorCode(), ex.getMessage());
-        return ResponseEntity.badRequest().body(body);
+        return ResponseEntity.badRequest()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -39,7 +42,9 @@ public class GlobalExceptionHandler {
         log.warn("Validation failed: {}", fieldErrors);
         ErrorResponseDto body = new ErrorResponseDto(
                 LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", fieldErrors);
-        return ResponseEntity.badRequest().body(body);
+        return ResponseEntity.badRequest()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -52,7 +57,9 @@ public class GlobalExceptionHandler {
         log.warn("Entity validation failed: {}", violations);
         ErrorResponseDto body = new ErrorResponseDto(
                 LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", violations);
-        return ResponseEntity.badRequest().body(body);
+        return ResponseEntity.badRequest()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body);
     }
 
     @ExceptionHandler(Exception.class)
@@ -61,6 +68,8 @@ public class GlobalExceptionHandler {
         ErrorResponseDto body = new ErrorResponseDto(
                 LocalDateTime.now(), HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 "INTERNAL_ERROR", "An unexpected technical error occurred. Please try again later.");
-        return ResponseEntity.internalServerError().body(body);
+        return ResponseEntity.internalServerError()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body);
     }
 }

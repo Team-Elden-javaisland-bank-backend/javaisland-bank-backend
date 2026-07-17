@@ -17,6 +17,5 @@ public class PendingRegistrationDto {
     private String lastName;
     private LocalDate birthDate;
     private String email;
-    private String pendingAccountNumber;
     private LocalDateTime registeredAt;
 }

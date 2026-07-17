@@ -40,7 +40,7 @@ public class RegistrationService {
         }
         var customerRole = roleTypeRepository.findByRoleName("C")
                 .orElseThrow(() -> new ApiBankException("Ruolo C non configurato."));
-        var pendingStatus = userStatusRepository.findByStatusName("PENDING")
+        var pendingStatus = userStatusRepository.findByUserStatus("PENDING")
                 .orElseThrow(() -> new ApiBankException("Stato PENDING non configurato."));
         User user = new User();
         user.setFirstName(request.getFirstName());
@@ -53,12 +53,19 @@ public class RegistrationService {
         user.setPlainPassword(request.getPassword());
         user.setRoleType(customerRole);
         user.setStatus(pendingStatus);
+        user.setProfession(request.getProfession());
+        user.setGender(request.getGender());
+        user.setFiscalCode(request.getFiscalCode());
+        user.setPhone(request.getPhone());
+        user.setResidence(request.getResidence());
+        user.setBirthPlace(request.getBirthPlace());
+        user.setBirthProvince(request.getBirthProvince());
         return userRepository.save(user);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void annulUser(Long userId) {
-        var annulledStatus = userStatusRepository.findByStatusName("ANNULLED")
+        var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
                 .orElseThrow(() -> new ApiBankException("Stato ANNULLED non configurato."));
         userRepository.findById(userId).ifPresent(u -> {
             u.setStatus(annulledStatus);
@@ -71,15 +78,6 @@ public class RegistrationService {
     public UserResponseDto register(RegisterRequestDto request) {
         User user = createPendingUser(request);
 
-        try {
-            accountService.createInitialAccountForUser(user);
-        } catch (Exception e) {
-            annulUser(user.getId());
-            throw new ApiBankException(
-                    "Registration could not be completed: the bank account could not be created. Your request has been annulled, please try registering again.",
-                    "REGISTRATION_ANNULLED");
-        }
-
         return UserResponseDto.builder()
                 .id(user.getId())
                 .username(user.getUsername())
@@ -88,6 +86,11 @@ public class RegistrationService {
                 .email(user.getEmail())
                 .birthDate(user.getBirthDate())
                 .statusId(user.getStatus().getId())
+                .profession(user.getProfession())
+                .gender(user.getGender())
+                .fiscalCode(user.getFiscalCode())
+                .phone(user.getPhone())
+                .residence(user.getResidence())
                 .build();
     }
 
@@ -96,13 +99,13 @@ public class RegistrationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
 
-        var pendingStatus = userStatusRepository.findByStatusName("PENDING")
+        var pendingStatus = userStatusRepository.findByUserStatus("PENDING")
                 .orElseThrow(() -> new ApiBankException("Stato PENDING non configurato."));
         if (!user.getStatus().getId().equals(pendingStatus.getId())) {
             throw new ApiBankException("La registrazione non è in stato PENDING.", "INVALID_STATE");
         }
 
-        var annulledStatus = userStatusRepository.findByStatusName("ANNULLED")
+        var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
                 .orElseThrow(() -> new ApiBankException("Stato ANNULLED non configurato."));
         user.setStatus(annulledStatus);
         userRepository.save(user);

@@ -14,4 +14,6 @@ public interface BeneficiaryRepository extends JpaRepository<Beneficiary, Long> 
     Optional<Beneficiary> findByIdAndUserId(Long id, Long userId);
 
     boolean existsByUserIdAndDestinationAccountNumber(Long userId, String destinationAccountNumber);
+
+    Optional<Beneficiary> findByUserIdAndDestinationAccountNumber(Long userId, String destinationAccountNumber);
 }

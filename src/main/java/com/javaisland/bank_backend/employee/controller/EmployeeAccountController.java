@@ -2,6 +2,7 @@ package com.javaisland.bank_backend.employee.controller;
 
 import com.javaisland.bank_backend.account.dto.AccountLimitResponseDto;
 import com.javaisland.bank_backend.account.dto.AccountResponseDto;
+import com.javaisland.bank_backend.account.dto.EmployeeUserDetailDto;
 import com.javaisland.bank_backend.account.dto.SetLimitRequestDto;
 import com.javaisland.bank_backend.account.service.AccountLimitService;
 import com.javaisland.bank_backend.account.service.AccountService;
@@ -64,9 +65,20 @@ public class EmployeeAccountController {
         return ResponseEntity.ok("Account " + accountNumber + " frozen.");
     }
 
+    @PutMapping("/{accountNumber}/unfreeze")
+    public ResponseEntity<String> unfreeze(@PathVariable String accountNumber) {
+        accountService.unfreezeAccount(accountNumber);
+        return ResponseEntity.ok("Account " + accountNumber + " unfrozen.");
+    }
+
     @GetMapping("/{accountNumber}")
     public ResponseEntity<AccountResponseDto> getDetail(@PathVariable String accountNumber) {
         return ResponseEntity.ok(accountService.getAccountDetailAsEmployee(accountNumber));
+    }
+
+    @GetMapping("/{accountNumber}/user-detail")
+    public ResponseEntity<EmployeeUserDetailDto> getUserDetail(@PathVariable String accountNumber) {
+        return ResponseEntity.ok(accountService.getEmployeeUserDetail(accountNumber));
     }
 
     @GetMapping("/{accountNumber}/limits")

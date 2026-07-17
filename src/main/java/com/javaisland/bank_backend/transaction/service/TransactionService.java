@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -40,6 +41,7 @@ import java.util.List;
 public class TransactionService {
 
     private static final long MAX_SEARCH_SPAN_DAYS = 365;
+    private static final long MAX_SCHEDULE_DAYS = 30;
 
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
@@ -66,10 +68,14 @@ public class TransactionService {
 
         if (source != null) {
             if (source.getStatusId() != AccountStatus.ACTIVE) {
-                throw new ApiBankException("Account " + source.getAccountNumber() + " is not active.", "INVALID_ACCOUNT_STATE");
+                throw new ApiBankException(
+                    "Account " + source.getAccountNumber() + " is not active. Withdrawal not possible.", "INVALID_ACCOUNT_STATE");
             }
             if (source.getBalance().compareTo(amount) < 0) {
-                throw new ApiBankException("Insufficient funds on account " + source.getAccountNumber(), "INSUFFICIENT_FUNDS");
+                throw new ApiBankException(
+                    "Insufficient funds on account " + source.getAccountNumber()
+                    + ". Available: €" + source.getBalance() + ", requested: €" + amount + ".",
+                    "INSUFFICIENT_FUNDS");
             }
             source.setBalance(source.getBalance().subtract(amount));
             accountRepository.save(source);
@@ -111,15 +117,29 @@ public class TransactionService {
         transferFunds(null, account, request.getAmount(), "DEPOSIT", "COMPLETED", "Deposit");
     }
 
+    private static final BigDecimal MIN_WITHDRAWAL = new BigDecimal("10");
+
     @Transactional
     public void withdraw(Long userId, TransactionRequestDto request) {
+        BigDecimal amount = request.getAmount();
+
+        if (amount.compareTo(MIN_WITHDRAWAL) < 0) {
+            throw new ApiBankException(
+                "Withdrawal amount €" + amount + " is below the minimum of €" + MIN_WITHDRAWAL + ".",
+                "MINIMUM_WITHDRAWAL");
+        }
+
         Account account = getAccountOrThrow(request.getAccountNumber());
         assertOwnership(userId, account);
-        transferFunds(account, null, request.getAmount(), "WITHDRAWAL", "COMPLETED", "Withdrawal");
+        accountLimitService.validateWithdrawal(account, amount);
+        transferFunds(account, null, amount, "WITHDRAWAL", "COMPLETED", "Withdrawal");
     }
 
     @Transactional
     public TransactionResponseDto transfer(Long userId, TransferRequestDto request) {
+        if (request.getAmount().compareTo(new BigDecimal("1")) < 0) {
+            throw new ApiBankException("Minimum transfer amount is €1.00.", "MINIMUM_TRANSFER");
+        }
         String destAccountNumber = request.getDestinationAccountNumber();
         if (request.getBeneficiaryId() != null) {
             destAccountNumber = beneficiaryService.resolveAccountNumber(userId, request.getBeneficiaryId());
@@ -133,10 +153,47 @@ public class TransactionService {
         Account source = getAccountOrThrow(request.getSourceAccountNumber());
         assertOwnership(userId, source);
         Account destination = getAccountOrThrow(destAccountNumber);
-        accountLimitService.validateTransfer(source, request.getAmount());
-        String description = request.getDescription() != null ? request.getDescription() : "Transfer";
-        Transaction tx = transferFunds(source, destination, request.getAmount(), "TRANSFER", "COMPLETED", description);
-        return mapToResponseDto(tx);
+
+        boolean isInstant = Boolean.TRUE.equals(request.getIsInstant());
+        accountLimitService.validateTransfer(source, request.getAmount(), isInstant);
+
+        String typeName = isInstant ? "INSTANT_TRANSFER" : "TRANSFER";
+        String description = request.getDescription() != null ? request.getDescription() : (isInstant ? "Instant Transfer" : "Scheduled Transfer");
+
+        if (isInstant) {
+            Transaction tx = transferFunds(source, destination, request.getAmount(), typeName, "COMPLETED", description);
+            return mapToResponseDto(tx);
+        }
+
+        LocalDate scheduledDate = request.getScheduledDate();
+        if (scheduledDate == null) {
+            throw new ApiBankException("Scheduled date is required for normal transfers.", "MISSING_SCHEDULED_DATE");
+        }
+        if (!scheduledDate.isAfter(LocalDate.now())) {
+            throw new ApiBankException("Scheduled date must be at least tomorrow.", "INVALID_SCHEDULED_DATE");
+        }
+        if (ChronoUnit.DAYS.between(LocalDate.now(), scheduledDate) > MAX_SCHEDULE_DAYS) {
+            throw new ApiBankException("Scheduled date cannot be more than " + MAX_SCHEDULE_DAYS + " days from today.", "SCHEDULE_TOO_FAR");
+        }
+
+        int typeId = getTypeIdOrThrow(typeName);
+        int statusId = getStatusIdOrThrow("PENDING");
+
+        Transaction tx = new Transaction();
+        tx.setAmount(request.getAmount());
+        tx.setTypeId(typeId);
+        tx.setStatusId(statusId);
+        tx.setDescription(description);
+        tx.setSourceAccount(source);
+        tx.setDestinationAccount(destination);
+        tx.setScheduledDate(scheduledDate.atStartOfDay());
+        Transaction saved = transactionRepository.save(tx);
+
+        log.info("Scheduled transaction #{} type={} amount={} source={} dest={} scheduledDate={}",
+                saved.getId(), typeName, request.getAmount(),
+                source.getAccountNumber(), destination.getAccountNumber(), scheduledDate);
+
+        return mapToResponseDto(saved);
     }
 
     @Transactional(readOnly = true)
@@ -181,6 +238,87 @@ public class TransactionService {
         return PageResponseDto.from(result.map(this::mapToResponseDto));
     }
 
+    @Transactional
+    public void executePendingTransfers() {
+        int pendingStatusId = getStatusIdOrThrow("PENDING");
+        List<Transaction> pendingTransactions = transactionRepository
+                .findByStatusIdAndScheduledDateLessThanEqual(pendingStatusId, LocalDateTime.now());
+
+        for (Transaction tx : pendingTransactions) {
+            try {
+                Account source = tx.getSourceAccount();
+                Account destination = tx.getDestinationAccount();
+
+                if (source != null && source.getStatusId() != AccountStatus.ACTIVE) {
+                    tx.setStatusId(getStatusIdOrThrow("FAILED"));
+                    tx.setDescription(tx.getDescription() + " - Source account not active");
+                    transactionRepository.save(tx);
+                    log.warn("Scheduled transfer #{} failed: source account not active", tx.getId());
+                    continue;
+                }
+
+                if (destination != null && destination.getStatusId() != AccountStatus.ACTIVE) {
+                    tx.setStatusId(getStatusIdOrThrow("FAILED"));
+                    tx.setDescription(tx.getDescription() + " - Destination account not active");
+                    transactionRepository.save(tx);
+                    log.warn("Scheduled transfer #{} failed: destination account not active", tx.getId());
+                    continue;
+                }
+
+                if (source != null && source.getBalance().compareTo(tx.getAmount()) < 0) {
+                    tx.setStatusId(getStatusIdOrThrow("FAILED"));
+                    tx.setDescription(tx.getDescription() + " - Insufficient funds");
+                    transactionRepository.save(tx);
+                    log.warn("Scheduled transfer #{} failed: insufficient funds", tx.getId());
+                    continue;
+                }
+
+                if (source != null) {
+                    source.setBalance(source.getBalance().subtract(tx.getAmount()));
+                    accountRepository.save(source);
+                    tx.setSourceBalanceAfter(source.getBalance());
+                }
+
+                if (destination != null) {
+                    destination.setBalance(destination.getBalance().add(tx.getAmount()));
+                    accountRepository.save(destination);
+                    tx.setDestBalanceAfter(destination.getBalance());
+                }
+
+                tx.setStatusId(getStatusIdOrThrow("COMPLETED"));
+                transactionRepository.save(tx);
+
+                log.info("Scheduled transfer #{} executed successfully", tx.getId());
+            } catch (Exception e) {
+                log.error("Error executing scheduled transfer #{}: {}", tx.getId(), e.getMessage());
+                tx.setStatusId(getStatusIdOrThrow("FAILED"));
+                tx.setDescription(tx.getDescription() + " - Execution error: " + e.getMessage());
+                transactionRepository.save(tx);
+            }
+        }
+    }
+
+    @Transactional
+    public void cancelPendingTransaction(Long userId, Long transactionId) {
+        Transaction tx = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ApiBankException("Transaction not found.", "TRANSACTION_NOT_FOUND"));
+
+        int pendingStatusId = getStatusIdOrThrow("PENDING");
+        if (tx.getStatusId() != pendingStatusId) {
+            throw new ApiBankException("Only pending transactions can be cancelled.", "INVALID_TRANSACTION_STATE");
+        }
+
+        if (tx.getSourceAccount() != null) {
+            assertOwnership(userId, tx.getSourceAccount());
+        }
+
+        tx.setStatusId(getStatusIdOrThrow("CANCELLED"));
+        tx.setDescription(tx.getDescription() + " - Cancelled by user");
+        transactionRepository.save(tx);
+
+        log.info("Transaction #{} cancelled by user", transactionId);
+    }
+
     private int getTypeIdOrThrow(String typeName) {
         return transactionTypeRepository.findByTypeName(typeName)
                 .map(TransactionType::getId)
@@ -207,15 +345,35 @@ public class TransactionService {
     }
 
     private TransactionResponseDto mapToResponseDto(Transaction tx) {
+        TransactionType txType = transactionTypeRepository.findById(tx.getTypeId()).orElse(null);
+        TransactionStatus txStatus = transactionStatusRepository.findById(tx.getStatusId()).orElse(null);
+
+        String sourceUserName = null;
+        if (tx.getSourceAccount() != null && tx.getSourceAccount().getUser() != null) {
+            var user = tx.getSourceAccount().getUser();
+            sourceUserName = user.getFirstName() + " " + user.getLastName();
+        }
+
+        String destinationUserName = null;
+        if (tx.getDestinationAccount() != null && tx.getDestinationAccount().getUser() != null) {
+            var user = tx.getDestinationAccount().getUser();
+            destinationUserName = user.getFirstName() + " " + user.getLastName();
+        }
+
         return TransactionResponseDto.builder()
                 .id(tx.getId())
                 .amount(tx.getAmount())
                 .typeId(tx.getTypeId())
                 .statusId(tx.getStatusId())
+                .typeName(txType != null ? txType.getTypeName() : null)
+                .statusName(txStatus != null ? txStatus.getStatusName() : null)
                 .description(tx.getDescription())
                 .createdAt(tx.getCreatedAt())
+                .scheduledDate(tx.getScheduledDate())
                 .sourceAccountNumber(tx.getSourceAccount() != null ? tx.getSourceAccount().getAccountNumber() : null)
                 .destinationAccountNumber(tx.getDestinationAccount() != null ? tx.getDestinationAccount().getAccountNumber() : null)
+                .sourceUserName(sourceUserName)
+                .destinationUserName(destinationUserName)
                 .sourceBalanceAfter(tx.getSourceBalanceAfter())
                 .destBalanceAfter(tx.getDestBalanceAfter())
                 .build();

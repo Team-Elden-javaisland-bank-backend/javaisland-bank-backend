@@ -72,6 +72,21 @@ public class BeneficiaryService {
         return beneficiary.getDestinationAccountNumber();
     }
 
+    @Transactional(readOnly = true)
+    public BeneficiaryResponseDto findByAccountNumber(Long userId, String accountNumber) {
+        return beneficiaryRepository.findByUserIdAndDestinationAccountNumber(userId, accountNumber)
+                .map(this::mapToDto)
+                .orElse(null);
+    }
+
+    @Transactional
+    public BeneficiaryResponseDto rename(Long userId, Long beneficiaryId, String newNickname) {
+        Beneficiary beneficiary = beneficiaryRepository.findByIdAndUserId(beneficiaryId, userId)
+                .orElseThrow(() -> new ApiBankException("Beneficiary not found.", "BENEFICIARY_NOT_FOUND"));
+        beneficiary.setNickname(newNickname);
+        return mapToDto(beneficiaryRepository.save(beneficiary));
+    }
+
     private BeneficiaryResponseDto mapToDto(Beneficiary b) {
         return BeneficiaryResponseDto.builder()
                 .id(b.getId())

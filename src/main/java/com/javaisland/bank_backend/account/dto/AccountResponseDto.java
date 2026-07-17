@@ -16,6 +16,10 @@ public class AccountResponseDto {
     private BigDecimal balance;
     private Integer statusId;
     private Long profileId;
+    private String profileFirstName;
+    private String profileLastName;
+    private Integer userStatusId;
+    private BigDecimal initialAmount;
     private LocalDateTime createdAt;
     private LocalDateTime closedAt;
 }

@@ -39,6 +39,9 @@ public class Transaction {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "scheduled_date")
+    private LocalDateTime scheduledDate;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "source_account_id")
     private Account sourceAccount;

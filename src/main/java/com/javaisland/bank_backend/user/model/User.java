@@ -61,6 +61,41 @@ public class User {
     @Column(name = "branch_code", length = 20)
     private String branchCode;
 
+    @NotBlank(message = "La professione è obbligatoria")
+    @Size(max = 100, message = "La professione non può superare i 100 caratteri")
+    @Column(name = "profession", length = 100)
+    private String profession;
+
+    @NotBlank(message = "Il sesso è obbligatorio")
+    @Size(min = 1, max = 1, message = "Il sesso deve essere M o F")
+    @Column(name = "gender", length = 1)
+    private String gender;
+
+    @NotBlank(message = "Il codice fiscale è obbligatorio")
+    @Size(min = 16, max = 16, message = "Il codice fiscale deve essere di 16 caratteri")
+    @Column(name = "fiscal_code", unique = true, length = 16)
+    private String fiscalCode;
+
+    @NotBlank(message = "Il telefono è obbligatorio")
+    @Size(max = 20, message = "Il telefono non può superare i 20 caratteri")
+    @Column(name = "phone", length = 20)
+    private String phone;
+
+    @NotBlank(message = "La residenza è obbligatoria")
+    @Size(max = 200, message = "La residenza non può superare i 200 caratteri")
+    @Column(name = "residence", length = 200)
+    private String residence;
+
+    @NotBlank(message = "Il luogo di nascita è obbligatorio")
+    @Size(max = 100, message = "Il luogo di nascita non può superare i 100 caratteri")
+    @Column(name = "birth_place", length = 100)
+    private String birthPlace;
+
+    @NotBlank(message = "La provincia di nascita è obbligatoria")
+    @Size(min = 2, max = 2, message = "La provincia deve essere di 2 caratteri")
+    @Column(name = "birth_province", length = 2)
+    private String birthProvince;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "status_id", nullable = false)
     private UserStatus status;
@@ -71,4 +106,7 @@ public class User {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now(ZoneId.of("Europe/Rome"));
+
+    @Column(name = "limits_setup_complete", nullable = false)
+    private boolean limitsSetupComplete = false;
 }

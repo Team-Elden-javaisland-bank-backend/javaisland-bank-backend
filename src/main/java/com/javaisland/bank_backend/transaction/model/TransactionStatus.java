@@ -15,6 +15,7 @@ public class TransactionStatus {
     public static final int COMPLETED = 2;
     public static final int FAILED = 3;
     public static final int REJECTED = 4;
+    public static final int CANCELLED = 5;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

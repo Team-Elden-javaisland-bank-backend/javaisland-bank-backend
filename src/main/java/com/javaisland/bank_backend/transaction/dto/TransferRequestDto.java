@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Data
 public class TransferRequestDto {
@@ -21,4 +22,8 @@ public class TransferRequestDto {
     private BigDecimal amount;
 
     private String description;
+
+    private Boolean isInstant;
+
+    private LocalDate scheduledDate;
 }

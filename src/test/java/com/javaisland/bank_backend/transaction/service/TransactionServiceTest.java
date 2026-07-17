@@ -183,7 +183,7 @@ class TransactionServiceTest {
         var result = transactionService.transfer(10L, dto);
 
         assertNotNull(result);
-        verify(accountLimitService).validateTransfer(src, new BigDecimal("300"));
+        verify(accountLimitService).validateTransfer(src, new BigDecimal("300"), false);
     }
 
     @Test

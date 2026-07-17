@@ -16,4 +16,5 @@ public class AccountLimitResponseDto {
     private String limitType;
     private BigDecimal maxAmount;
     private LocalDateTime updatedAt;
+    private String changePolicy;
 }

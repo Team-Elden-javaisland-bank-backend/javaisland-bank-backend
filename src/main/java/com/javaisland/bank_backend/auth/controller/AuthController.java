@@ -7,6 +7,7 @@ import com.javaisland.bank_backend.auth.service.RegistrationService;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import com.javaisland.bank_backend.user.dto.UserResponseDto;
+import com.javaisland.bank_backend.user.service.UserPinService;
 import com.nimbusds.jwt.SignedJWT;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class AuthController {
 
     private final RegistrationService registrationService;
     private final UserRepository userRepository;
+    private final UserPinService userPinService;
 
     @Value("${keycloak.auth-server-url}")
     private String keycloakAuthUrl;
@@ -50,15 +52,15 @@ public class AuthController {
                 .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException(
                         "Utente non trovato.", "USER_NOT_FOUND"));
 
-        String statusName = user.getStatus().getStatusName();
-        if (!"ACTIVE".equals(statusName)) {
-            String message = switch (statusName) {
+        String userStatus = user.getStatus().getUserStatus();
+        if (!"ACTIVE".equals(userStatus)) {
+            String message = switch (userStatus) {
                 case "PENDING" -> "Account in attesa di validazione da parte di un impiegato.";
                 case "ANNULLED" -> "Registrazione annullata. Contatta il supporto.";
                 case "SUSPENDED" -> "Account sospeso. Contatta il supporto.";
                 default -> "Account non disponibile.";
             };
-            throw new com.javaisland.bank_backend.exception.ApiBankException(message, "ACCOUNT_" + statusName);
+            throw new com.javaisland.bank_backend.exception.ApiBankException(message, "ACCOUNT_" + userStatus);
         }
 
         try {
@@ -107,6 +109,8 @@ public class AuthController {
                     .firstName(user.getFirstName())
                     .lastName(user.getLastName())
                     .email(user.getEmail())
+                    .limitsSetupComplete(user.isLimitsSetupComplete())
+                    .pinSetupComplete(userPinService.hasPin(user.getId()))
                     .build());
 
         } catch (com.javaisland.bank_backend.exception.ApiBankException e) {

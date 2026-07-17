@@ -18,4 +18,11 @@ public class UserResponseDto {
     private String email;
     private LocalDate birthDate;
     private Integer statusId;
+    private String profession;
+    private String gender;
+    private String fiscalCode;
+    private String phone;
+    private String residence;
+    private String birthPlace;
+    private String birthProvince;
 }

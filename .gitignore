@@ -38,3 +38,7 @@ app.err
 app.log
 keycloak-realm-export.json
 *.ps1
+
+*.log
+ng-serve-err.log
+ng-serve.log

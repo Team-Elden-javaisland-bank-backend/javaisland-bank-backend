@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/customer/transactions")
@@ -28,19 +29,19 @@ public class TransactionController {
     private final UserRepository userRepository;
 
     @PostMapping("/deposit")
-    public ResponseEntity<String> deposit(@AuthenticationPrincipal Jwt jwt,
-                                          @Valid @RequestBody TransactionRequestDto request) {
+    public ResponseEntity<Map<String, String>> deposit(@AuthenticationPrincipal Jwt jwt,
+                                           @Valid @RequestBody TransactionRequestDto request) {
         Long userId = getUserId(jwt);
         transactionService.deposit(userId, request);
-        return ResponseEntity.ok("Deposit completed.");
+        return ResponseEntity.ok(Map.of("message", "Deposit completed."));
     }
 
     @PostMapping("/withdraw")
-    public ResponseEntity<String> withdraw(@AuthenticationPrincipal Jwt jwt,
-                                           @Valid @RequestBody TransactionRequestDto request) {
+    public ResponseEntity<Map<String, String>> withdraw(@AuthenticationPrincipal Jwt jwt,
+                                            @Valid @RequestBody TransactionRequestDto request) {
         Long userId = getUserId(jwt);
         transactionService.withdraw(userId, request);
-        return ResponseEntity.ok("Withdrawal completed.");
+        return ResponseEntity.ok(Map.of("message", "Withdrawal completed."));
     }
 
     @PostMapping("/transfer")
@@ -67,6 +68,15 @@ public class TransactionController {
         Long userId = getUserId(jwt);
         return ResponseEntity.ok(transactionService.getAllAccountsTransactions(
                 userId, start.atStartOfDay(), end.atTime(23, 59, 59), page, size));
+    }
+
+    @DeleteMapping("/{transactionId}/cancel")
+    public ResponseEntity<Map<String, String>> cancelTransaction(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long transactionId) {
+        Long userId = getUserId(jwt);
+        transactionService.cancelPendingTransaction(userId, transactionId);
+        return ResponseEntity.ok(Map.of("message", "Transaction cancelled."));
     }
 
     private Long getUserId(Jwt jwt) {

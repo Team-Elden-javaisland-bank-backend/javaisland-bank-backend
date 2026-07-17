@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, Long>, JpaSpecificationExecutor<Transaction> {
@@ -29,4 +30,6 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             @Param("statusId") Integer statusId,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
+
+    List<Transaction> findByStatusIdAndScheduledDateLessThanEqual(Integer statusId, LocalDateTime scheduledDate);
 }

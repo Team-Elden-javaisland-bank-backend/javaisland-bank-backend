@@ -16,4 +16,6 @@ public class LoginResponseDto {
     private String firstName;
     private String lastName;
     private String email;
+    private boolean limitsSetupComplete;
+    private boolean pinSetupComplete;
 }

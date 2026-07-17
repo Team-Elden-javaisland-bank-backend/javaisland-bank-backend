@@ -45,6 +45,25 @@ public class BeneficiaryController {
         return ResponseEntity.ok("Beneficiary removed.");
     }
 
+    @GetMapping("/check")
+    public ResponseEntity<BeneficiaryResponseDto> check(@AuthenticationPrincipal Jwt jwt,
+                                                         @RequestParam String accountNumber) {
+        Long userId = getUserId(jwt);
+        return ResponseEntity.ok(beneficiaryService.findByAccountNumber(userId, accountNumber));
+    }
+
+    @PutMapping("/{id}/rename")
+    public ResponseEntity<BeneficiaryResponseDto> rename(@AuthenticationPrincipal Jwt jwt,
+                                                          @PathVariable Long id,
+                                                          @RequestBody java.util.Map<String, String> body) {
+        Long userId = getUserId(jwt);
+        String nickname = body.get("nickname");
+        if (nickname == null || nickname.isBlank()) {
+            throw new com.javaisland.bank_backend.exception.ApiBankException("Nickname obbligatorio.", "INVALID_NICKNAME");
+        }
+        return ResponseEntity.ok(beneficiaryService.rename(userId, id, nickname));
+    }
+
     private Long getUserId(Jwt jwt) {
         return userRepository.findByKeycloakId(jwt.getSubject())
                 .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"))

@@ -1,4 +1,4 @@
-# JavaIsland Bank — Backend
+# EldenBank — Backend
 
 API REST per gestione servizi bancari digitali.
 
