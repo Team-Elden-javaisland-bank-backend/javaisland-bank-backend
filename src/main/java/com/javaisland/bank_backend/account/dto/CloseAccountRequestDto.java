@@ -6,6 +6,6 @@ import lombok.Data;
 @Data
 public class CloseAccountRequestDto {
 
-    @NotBlank(message = "Account number is required")
+    @NotBlank(message = "Il numero del conto è obbligatorio")
     private String accountNumber;
 }

@@ -57,19 +57,19 @@ public class AccountLimitService {
     @Transactional
     public AccountLimitResponseDto setLimit(String accountNumber, String limitTypeName, SetLimitRequestDto request) {
         Account account = accountRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new ApiBankException("Account " + accountNumber + " not found.", "ACCOUNT_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Conto " + accountNumber + " non trovato.", "ACCOUNT_NOT_FOUND"));
 
         LimitType limitType = limitTypeRepository.findByLimitName(limitTypeName)
-                .orElseThrow(() -> new ApiBankException("Limit type '" + limitTypeName + "' not found.", "LIMIT_TYPE_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Tipo limite '" + limitTypeName + "' non trovato.", "LIMIT_TYPE_NOT_FOUND"));
 
         BigDecimal maxAllowed = MAX_VALUES.get(limitTypeName);
         if (maxAllowed != null && request.getMaxAmount().compareTo(maxAllowed) > 0) {
-            throw new ApiBankException("Amount exceeds maximum allowed value of " + maxAllowed + ".", "LIMIT_EXCEEDS_MAX");
+            throw new ApiBankException("L'importo supera il valore massimo consentito di " + maxAllowed + ".", "LIMIT_EXCEEDS_MAX");
         }
 
         BigDecimal minAllowed = MIN_VALUES.getOrDefault(limitTypeName, BigDecimal.ZERO);
         if (request.getMaxAmount().compareTo(minAllowed) < 0) {
-            throw new ApiBankException("Amount is below minimum allowed value of " + minAllowed + ".", "LIMIT_BELOW_MIN");
+            throw new ApiBankException("L'importo è inferiore al valore minimo consentito di " + minAllowed + ".", "LIMIT_BELOW_MIN");
         }
 
         AccountLimit limit = accountLimitRepository.findByAccountAndLimitType(account, limitType)
@@ -85,37 +85,37 @@ public class AccountLimitService {
     @Transactional
     public AccountLimitResponseDto setLimitAsCustomer(Long userId, String accountNumber, String limitTypeName, SetLimitRequestDto request) {
         Account account = accountRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new ApiBankException("Account " + accountNumber + " not found.", "ACCOUNT_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Conto " + accountNumber + " non trovato.", "ACCOUNT_NOT_FOUND"));
 
         if (!account.getUser().getId().equals(userId)) {
-            throw new ApiBankException("Account does not belong to this user.", "FORBIDDEN");
+            throw new ApiBankException("Il conto non appartiene a questo utente.", "FORBIDDEN");
         }
 
         LimitType limitType = limitTypeRepository.findByLimitName(limitTypeName)
-                .orElseThrow(() -> new ApiBankException("Limit type '" + limitTypeName + "' not found.", "LIMIT_TYPE_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Tipo limite '" + limitTypeName + "' non trovato.", "LIMIT_TYPE_NOT_FOUND"));
 
         if (limitType.getChangePolicy() == LimitType.ChangePolicy.BANK_ONLY) {
             AccountLimit existingCheck = accountLimitRepository.findByAccountAndLimitType(account, limitType).orElse(null);
             if (existingCheck != null && Boolean.TRUE.equals(account.getUser().isLimitsSetupComplete())) {
-                throw new ApiBankException("This limit can only be changed by a bank employee.", "BANK_ONLY_LIMIT");
+                throw new ApiBankException("Questo limite può essere modificato solo da un impiegato della banca.", "BANK_ONLY_LIMIT");
             }
         }
 
         BigDecimal maxAllowed = MAX_VALUES.get(limitTypeName);
         if (maxAllowed != null && request.getMaxAmount().compareTo(maxAllowed) > 0) {
-            throw new ApiBankException("Amount exceeds maximum allowed value of " + maxAllowed + ".", "LIMIT_EXCEEDS_MAX");
+            throw new ApiBankException("L'importo supera il valore massimo consentito di " + maxAllowed + ".", "LIMIT_EXCEEDS_MAX");
         }
 
         BigDecimal minAllowed = MIN_VALUES.getOrDefault(limitTypeName, BigDecimal.ZERO);
         if (request.getMaxAmount().compareTo(minAllowed) < 0) {
-            throw new ApiBankException("Amount is below minimum allowed value of " + minAllowed + ".", "LIMIT_BELOW_MIN");
+            throw new ApiBankException("L'importo è inferiore al valore minimo consentito di " + minAllowed + ".", "LIMIT_BELOW_MIN");
         }
 
         AccountLimit existing = accountLimitRepository.findByAccountAndLimitType(account, limitType).orElse(null);
 
         if (limitType.getChangePolicy() == LimitType.ChangePolicy.USER_LOWER_ONLY && existing != null && Boolean.TRUE.equals(account.getUser().isLimitsSetupComplete())) {
             if (request.getMaxAmount().compareTo(existing.getMaxAmount()) > 0) {
-                throw new ApiBankException("You can only lower this limit. Contact a bank employee to increase it.", "LOWER_ONLY_LIMIT");
+                throw new ApiBankException("Puoi solo abbassare questo limite. Contatta un impiegato della banca per aumentarlo.", "LOWER_ONLY_LIMIT");
             }
         }
 
@@ -130,7 +130,7 @@ public class AccountLimitService {
     @Transactional(readOnly = true)
     public List<AccountLimitResponseDto> getLimits(String accountNumber) {
         Account account = accountRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new ApiBankException("Account " + accountNumber + " not found.", "ACCOUNT_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Conto " + accountNumber + " non trovato.", "ACCOUNT_NOT_FOUND"));
 
         return accountLimitRepository.findByAccountId(account.getId())
                 .stream()
@@ -149,7 +149,7 @@ public class AccountLimitService {
                 case TYPE_SINGLE -> {
                     if (!isInstant && amount.compareTo(max) > 0) {
                         throw new ApiBankException(
-                            "Transfer amount exceeds single transfer limit of " + max + ".", "LIMIT_EXCEEDED");
+                            "L'importo del bonifico supera il limite singolo bonifico di " + max + ".", "LIMIT_EXCEEDED");
                     }
                 }
                 case TYPE_DAILY -> {
@@ -160,7 +160,7 @@ public class AccountLimitService {
                             dayStart, dayEnd);
                     if (sumToday.add(amount).compareTo(max) > 0) {
                         throw new ApiBankException(
-                            "Daily transfer limit of " + max + " would be exceeded. Already used: " + sumToday + ".",
+                            "Il limite di bonifico giornaliero di " + max + " verrebbe superato. Già utilizzato: " + sumToday + ".",
                             "LIMIT_EXCEEDED");
                     }
                 }
@@ -172,14 +172,14 @@ public class AccountLimitService {
                             monthStart, monthEnd);
                     if (sumMonth.add(amount).compareTo(max) > 0) {
                         throw new ApiBankException(
-                            "Monthly transfer limit of " + max + " would be exceeded. Already used: " + sumMonth + ".",
+                            "Il limite di bonifico mensile di " + max + " verrebbe superato. Già utilizzato: " + sumMonth + ".",
                             "LIMIT_EXCEEDED");
                     }
                 }
                 case "INSTANT_TRANSFER_SINGLE" -> {
                     if (isInstant && amount.compareTo(max) > 0) {
                         throw new ApiBankException(
-                            "Instant transfer amount exceeds limit of " + max + ".", "LIMIT_EXCEEDED");
+                            "L'importo del bonifico istantaneo supera il limite di " + max + ".", "LIMIT_EXCEEDED");
                     }
                 }
             }
@@ -198,7 +198,7 @@ public class AccountLimitService {
                 foundAtmLimit = true;
                 if (amount.compareTo(max) > 0) {
                     throw new ApiBankException(
-                        "Withdrawal amount €" + amount + " exceeds ATM limit of €" + max + ".", "LIMIT_EXCEEDED");
+                        "L'importo del prelievo €" + amount + " supera il limite bancomat di €" + max + ".", "LIMIT_EXCEEDED");
                 }
             }
         }
@@ -207,7 +207,7 @@ public class AccountLimitService {
             BigDecimal defaultMax = MAX_VALUES.get("ATM_WITHDRAWAL");
             if (defaultMax != null && amount.compareTo(defaultMax) > 0) {
                 throw new ApiBankException(
-                    "Withdrawal amount €" + amount + " exceeds maximum allowed of €" + defaultMax + ".", "LIMIT_EXCEEDED");
+                    "L'importo del prelievo €" + amount + " supera il massimo consentito di €" + defaultMax + ".", "LIMIT_EXCEEDED");
             }
         }
     }

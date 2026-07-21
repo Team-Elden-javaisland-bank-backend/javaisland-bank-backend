@@ -26,22 +26,22 @@ public class BeneficiaryService {
     @Transactional
     public BeneficiaryResponseDto save(Long userId, BeneficiaryRequestDto request) {
         var account = accountRepository.findByAccountNumber(request.getDestinationAccountNumber())
-                .orElseThrow(() -> new ApiBankException("Account " + request.getDestinationAccountNumber() + " not found.", "ACCOUNT_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Conto " + request.getDestinationAccountNumber() + " non trovato.", "ACCOUNT_NOT_FOUND"));
 
         if (account.getUser().getId().equals(userId)) {
             throw new ApiBankException("Non puoi aggiungere uno dei tuoi conti come beneficiario.", "SELF_BENEFICIARY_FORBIDDEN");
         }
 
         if (account.getStatusId() != AccountStatus.ACTIVE) {
-            throw new ApiBankException("Destination account is not active.", "INVALID_ACCOUNT_STATE");
+            throw new ApiBankException("Il conto di destinazione non è attivo.", "INVALID_ACCOUNT_STATE");
         }
 
         if (beneficiaryRepository.existsByUserIdAndDestinationAccountNumber(userId, request.getDestinationAccountNumber())) {
-            throw new ApiBankException("Beneficiary already exists.", "DUPLICATE_BENEFICIARY");
+            throw new ApiBankException("Il beneficiario esiste già.", "DUPLICATE_BENEFICIARY");
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("User not found.", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
 
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.setUser(user);
@@ -62,13 +62,13 @@ public class BeneficiaryService {
     @Transactional
     public void delete(Long userId, Long beneficiaryId) {
         Beneficiary beneficiary = beneficiaryRepository.findByIdAndUserId(beneficiaryId, userId)
-                .orElseThrow(() -> new ApiBankException("Beneficiary not found.", "BENEFICIARY_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Beneficiario non trovato.", "BENEFICIARY_NOT_FOUND"));
         beneficiaryRepository.delete(beneficiary);
     }
 
     public String resolveAccountNumber(Long userId, Long beneficiaryId) {
         Beneficiary beneficiary = beneficiaryRepository.findByIdAndUserId(beneficiaryId, userId)
-                .orElseThrow(() -> new ApiBankException("Beneficiary not found.", "BENEFICIARY_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Beneficiario non trovato.", "BENEFICIARY_NOT_FOUND"));
         return beneficiary.getDestinationAccountNumber();
     }
 
@@ -82,7 +82,7 @@ public class BeneficiaryService {
     @Transactional
     public BeneficiaryResponseDto rename(Long userId, Long beneficiaryId, String newNickname) {
         Beneficiary beneficiary = beneficiaryRepository.findByIdAndUserId(beneficiaryId, userId)
-                .orElseThrow(() -> new ApiBankException("Beneficiary not found.", "BENEFICIARY_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Beneficiario non trovato.", "BENEFICIARY_NOT_FOUND"));
         beneficiary.setNickname(newNickname);
         return mapToDto(beneficiaryRepository.save(beneficiary));
     }

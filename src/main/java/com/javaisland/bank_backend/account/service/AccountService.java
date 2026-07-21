@@ -12,6 +12,7 @@ import com.javaisland.bank_backend.audit.service.AuditLogService;
 import com.javaisland.bank_backend.card.repository.CardRepository;
 import com.javaisland.bank_backend.card.service.CardService;
 import com.javaisland.bank_backend.exception.ApiBankException;
+import com.javaisland.bank_backend.notification.service.NotificationService;
 import com.javaisland.bank_backend.transaction.service.TransactionService;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.repository.UserRepository;
@@ -44,11 +45,12 @@ public class AccountService {
     private final CardRepository cardRepository;
     private final TransactionRepository transactionRepository;
     private final AuditLogService auditLogService;
+    private final NotificationService notificationService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Account createInitialAccountForUser(User user) {
         User managedUser = userRepository.findById(user.getId())
-                .orElseThrow(() -> new ApiBankException("User not found.", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
         Account account = new Account();
         account.setAccountNumber(generateUniqueAccountNumber());
         account.setBalance(BigDecimal.ZERO);
@@ -65,13 +67,13 @@ public class AccountService {
                 .anyMatch(a -> a.getStatusId() == AccountStatus.ACTIVE);
         if (userHasActiveAccount) {
             throw new ApiBankException(
-                    "User already has an active account. Use employee account activation instead.", "INVALID_STATE");
+                    "L'utente ha già un conto attivo. Usa l'attivazione conto da impiegato.", "INVALID_STATE");
         }
         Account account = accountRepository.findByUserId(userId).stream()
                 .filter(a -> a.getStatusId() == AccountStatus.INACTIVE)
                 .findFirst()
                 .orElseThrow(() -> new ApiBankException(
-                        "No pending account found for this registration.", "ACCOUNT_NOT_FOUND"));
+                        "Nessun conto in attesa trovato per questa registrazione.", "ACCOUNT_NOT_FOUND"));
         account.setStatusId(AccountStatus.ACTIVE);
         accountRepository.save(account);
         log.info("Account {} activated as part of registration validation for user id={}", account.getAccountNumber(), userId);
@@ -81,17 +83,17 @@ public class AccountService {
     public void activateAccount(String accountNumber) {
         Account account = getAccountOrThrow(accountNumber);
         if (account.getStatusId() != AccountStatus.INACTIVE) {
-            throw new ApiBankException("Account " + accountNumber + " is not pending activation.", "INVALID_ACCOUNT_STATE");
+            throw new ApiBankException("Il conto " + accountNumber + " non è in attesa di attivazione.", "INVALID_ACCOUNT_STATE");
         }
         boolean userHasActiveAccount = accountRepository.findByUserId(account.getUser().getId()).stream()
                 .anyMatch(a -> a.getStatusId() == AccountStatus.ACTIVE);
         if (!userHasActiveAccount) {
-            throw new ApiBankException("Account " + accountNumber + " belongs to a registration in progress. Use registration activation instead.", "REGISTRATION_ACCOUNT");
+            throw new ApiBankException("Il conto " + accountNumber + " appartiene a una registrazione in corso. Usa l'attivazione registrazione.", "REGISTRATION_ACCOUNT");
         }
         account.setStatusId(AccountStatus.ACTIVE);
         if (account.getSourceAccountNumber() != null && account.getInitialAmount() != null) {
             Account source = accountRepository.findByAccountNumber(account.getSourceAccountNumber())
-                    .orElseThrow(() -> new ApiBankException("Source account not found.", "ACCOUNT_NOT_FOUND"));
+                    .orElseThrow(() -> new ApiBankException("Conto sorgente non trovato.", "ACCOUNT_NOT_FOUND"));
             source.setBalance(source.getBalance().subtract(account.getInitialAmount()));
             accountRepository.save(source);
             account.setBalance(account.getInitialAmount());
@@ -105,6 +107,7 @@ public class AccountService {
         cardService.activateCardsByAccountId(account.getId());
         auditLogService.log("ACCOUNT", account.getId(), "ACTIVATE", "system",
                 "Conto attivato: " + accountNumber);
+        notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato attivato.");
         log.info("Account {} activated by employee, card issued and activated", accountNumber);
     }
 
@@ -112,12 +115,12 @@ public class AccountService {
     public void rejectAccountRequest(String accountNumber) {
         Account account = getAccountOrThrow(accountNumber);
         if (account.getStatusId() != AccountStatus.INACTIVE) {
-            throw new ApiBankException("Account " + accountNumber + " is not pending activation.", "INVALID_ACCOUNT_STATE");
+            throw new ApiBankException("Il conto " + accountNumber + " non è in attesa di attivazione.", "INVALID_ACCOUNT_STATE");
         }
         boolean userHasActiveAccount = accountRepository.findByUserId(account.getUser().getId()).stream()
                 .anyMatch(a -> a.getStatusId() == AccountStatus.ACTIVE);
         if (!userHasActiveAccount) {
-            throw new ApiBankException("Account " + accountNumber + " belongs to a registration in progress. Cannot reject.", "REGISTRATION_ACCOUNT");
+            throw new ApiBankException("Il conto " + accountNumber + " appartiene a una registrazione in corso. Impossibile rifiutare.", "REGISTRATION_ACCOUNT");
         }
         account.setStatusId(AccountStatus.CLOSED);
         account.setClosedAt(LocalDateTime.now());
@@ -127,6 +130,7 @@ public class AccountService {
         cardService.deleteCardsByAccountId(account.getId());
         auditLogService.log("ACCOUNT", account.getId(), "REJECT", "system",
                 "Richiesta conto rifiutata: " + accountNumber);
+        notificationService.send(account.getUser().getId(), "ACCOUNT", "La richiesta di apertura conto " + accountNumber + " è stata rifiutata.");
         log.info("Account {} request rejected by employee — CLOSED, cards deleted", accountNumber);
     }
 
@@ -145,7 +149,7 @@ public class AccountService {
         assertOwnership(account, user);
 
         if (account.getStatusId() != AccountStatus.ACTIVE) {
-            throw new ApiBankException("Only an active account can be put in closure request state.", "INVALID_ACCOUNT_STATE");
+            throw new ApiBankException("Solo un conto attivo può essere messo in richiesta di chiusura.", "INVALID_ACCOUNT_STATE");
         }
         if (account.getBalance().compareTo(BigDecimal.ZERO) > 0) {
             throw new ApiBankException("Il conto deve avere fondi zero prima di richiedere la chiusura.", "NON_ZERO_BALANCE");
@@ -154,7 +158,9 @@ public class AccountService {
             throw new ApiBankException("Non è possibile chiudere un conto che ha un trasferimento in sospeso verso un altro conto.", "PENDING_TRANSFER");
         }
         account.setStatusId(AccountStatus.FROZEN);
+        account.setClosureRequestedAt(LocalDateTime.now());
         accountRepository.save(account);
+        notificationService.send(userId, "ACCOUNT", "Richiesta di chiusura conto " + accountNumber + " inviata. In attesa di approvazione.");
         log.info("Closure requested by user id={} for account {}", user.getId(), accountNumber);
     }
 
@@ -162,10 +168,13 @@ public class AccountService {
     public void rejectClosure(String accountNumber) {
         Account account = getAccountOrThrow(accountNumber);
         if (account.getStatusId() != AccountStatus.FROZEN) {
-            throw new ApiBankException("Account " + accountNumber + " has no pending closure request.", "INVALID_ACCOUNT_STATE");
+            throw new ApiBankException("Il conto " + accountNumber + " non ha richieste di chiusura in sospeso.", "INVALID_ACCOUNT_STATE");
         }
         account.setStatusId(AccountStatus.ACTIVE);
+        account.setClosureRequestedAt(null);
+        account.setClosureRejectedAt(LocalDateTime.now());
         accountRepository.save(account);
+        notificationService.send(account.getUser().getId(), "ACCOUNT", "La richiesta di chiusura del conto " + accountNumber + " è stata rifiutata.");
         log.info("Closure request rejected for account {} by employee — back to ACTIVE", accountNumber);
     }
 
@@ -173,12 +182,13 @@ public class AccountService {
     public void freezeAccount(String accountNumber) {
         Account account = getAccountOrThrow(accountNumber);
         if (account.getStatusId() != AccountStatus.ACTIVE) {
-            throw new ApiBankException("Only active accounts can be frozen.", "INVALID_ACCOUNT_STATE");
+            throw new ApiBankException("Solo i conti attivi possono essere congelati.", "INVALID_ACCOUNT_STATE");
         }
         account.setStatusId(AccountStatus.FROZEN);
         accountRepository.save(account);
         auditLogService.log("ACCOUNT", account.getId(), "FREEZE", "system",
                 "Conto congelato: " + accountNumber);
+        notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato congelato da un impiegato.");
         log.info("Account {} frozen by employee", accountNumber);
     }
 
@@ -186,12 +196,24 @@ public class AccountService {
     public void unfreezeAccount(String accountNumber) {
         Account account = getAccountOrThrow(accountNumber);
         if (account.getStatusId() != AccountStatus.FROZEN) {
-            throw new ApiBankException("Account " + accountNumber + " is not frozen.", "INVALID_ACCOUNT_STATE");
+            throw new ApiBankException("Il conto " + accountNumber + " non è congelato.", "INVALID_ACCOUNT_STATE");
         }
+        boolean hadClosureRequest = account.getClosureRequestedAt() != null;
         account.setStatusId(AccountStatus.ACTIVE);
+        account.setClosureRequestedAt(null);
+        if (hadClosureRequest) {
+            account.setClosureRejectedAt(LocalDateTime.now());
+        }
         accountRepository.save(account);
         auditLogService.log("ACCOUNT", account.getId(), "UNFREEZE", "system",
                 "Conto scongelato: " + accountNumber);
+        if (hadClosureRequest) {
+            notificationService.send(account.getUser().getId(), "ACCOUNT",
+                    "La richiesta di chiusura del conto " + accountNumber + " è stata rifiutata. Il conto è stato riattivato.");
+        } else {
+            notificationService.send(account.getUser().getId(), "ACCOUNT",
+                    "Il tuo conto " + accountNumber + " è stato sbloccato.");
+        }
         log.info("Account {} unfrozen by employee", accountNumber);
     }
 
@@ -199,14 +221,16 @@ public class AccountService {
     public void validateClosure(String accountNumber) {
         Account account = getAccountOrThrow(accountNumber);
         if (account.getStatusId() != AccountStatus.FROZEN) {
-            throw new ApiBankException("Account " + accountNumber + " has no pending closure request.", "INVALID_ACCOUNT_STATE");
+            throw new ApiBankException("Il conto " + accountNumber + " non ha richieste di chiusura in sospeso.", "INVALID_ACCOUNT_STATE");
         }
         if (account.getBalance().compareTo(BigDecimal.ZERO) != 0) {
-            throw new ApiBankException("Cannot close account " + accountNumber + ": balance must be zero.", "NON_ZERO_BALANCE");
+            throw new ApiBankException("Impossibile chiudere il conto " + accountNumber + ": il saldo deve essere zero.", "NON_ZERO_BALANCE");
         }
         account.setStatusId(AccountStatus.CLOSED);
         account.setClosedAt(LocalDateTime.now());
+        account.setClosureRequestedAt(null);
         accountRepository.save(account);
+        notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato chiuso.");
         log.info("Account {} closed by employee", accountNumber);
     }
 
@@ -237,11 +261,11 @@ public class AccountService {
 
         if (request.getSourceAccountNumber() != null && !request.getSourceAccountNumber().isBlank()) {
             Account sourceAccount = accountRepository.findByAccountNumber(request.getSourceAccountNumber())
-                    .orElseThrow(() -> new ApiBankException("Source account not found.", "ACCOUNT_NOT_FOUND"));
+                    .orElseThrow(() -> new ApiBankException("Conto sorgente non trovato.", "ACCOUNT_NOT_FOUND"));
             assertOwnership(sourceAccount, user);
 
             if (sourceAccount.getStatusId() != AccountStatus.ACTIVE) {
-                throw new ApiBankException("Source account " + sourceAccount.getAccountNumber() + " is not active.", "INVALID_ACCOUNT_STATE");
+                throw new ApiBankException("Il conto sorgente " + sourceAccount.getAccountNumber() + " non è attivo.", "INVALID_ACCOUNT_STATE");
             }
 
             if (request.getInitialAmount() == null || request.getInitialAmount().compareTo(BigDecimal.ONE) < 0) {
@@ -257,6 +281,8 @@ public class AccountService {
         }
 
         newAccount = accountRepository.save(newAccount);
+
+        notificationService.send(userId, "ACCOUNT", "Richiesta di apertura conto " + newAccount.getAccountNumber() + " inviata. In attesa di approvazione.");
 
         log.info("User id={} opened additional account {} (INACTIVE), source={}, amount={}", user.getId(), newAccount.getAccountNumber(), request.getSourceAccountNumber(), request.getInitialAmount());
         return newAccount;
@@ -371,6 +397,15 @@ public class AccountService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public EmployeeUserDetailDto getEmployeeUserDetailByUserId(Long userId) {
+        userRepository.findById(userId)
+                .orElseThrow(() -> new ApiBankException("Utente non trovato con id: " + userId));
+        Account account = accountRepository.findByUserId(userId).stream().findFirst()
+                .orElseThrow(() -> new ApiBankException("Nessun conto trovato per l'utente id: " + userId));
+        return getEmployeeUserDetail(account.getAccountNumber());
+    }
+
     private String getStatusName(Integer statusId) {
         if (statusId == null) return "Sconosciuto";
         return switch (statusId) {
@@ -392,17 +427,17 @@ public class AccountService {
 
     private Account getAccountOrThrow(String accountNumber) {
         return accountRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new ApiBankException("Account " + accountNumber + " not found.", "ACCOUNT_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Conto " + accountNumber + " non trovato.", "ACCOUNT_NOT_FOUND"));
     }
 
     private User getUserOrThrow(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("User not found.", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
     }
 
     private void assertOwnership(Account account, User user) {
         if (!account.getUser().getId().equals(user.getId())) {
-            throw new ApiBankException("Account " + account.getAccountNumber() + " does not belong to the current user.", "FORBIDDEN");
+            throw new ApiBankException("Il conto " + account.getAccountNumber() + " non appartiene all'utente corrente.", "FORBIDDEN");
         }
     }
 
@@ -413,7 +448,7 @@ public class AccountService {
                 return candidate;
             }
         }
-        throw new ApiBankException("Technical error generating a unique account number, please retry.", "IBAN_GENERATION_FAILED");
+        throw new ApiBankException("Errore tecnico nella generazione del numero di conto univoco, riprova.", "IBAN_GENERATION_FAILED");
     }
 
     private AccountResponseDto toDto(Account account) {

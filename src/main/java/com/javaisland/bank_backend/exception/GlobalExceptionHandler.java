@@ -37,9 +37,9 @@ public class GlobalExceptionHandler {
         String fieldErrors = ex.getBindingResult().getFieldErrors().stream()
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .reduce((a, b) -> a + "; " + b)
-                .orElse("Validation failed");
+                .orElse("Validazione fallita");
 
-        log.warn("Validation failed: {}", fieldErrors);
+        log.warn("Validazione fallita: {}", fieldErrors);
         ErrorResponseDto body = new ErrorResponseDto(
                 LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", fieldErrors);
         return ResponseEntity.badRequest()
@@ -52,7 +52,7 @@ public class GlobalExceptionHandler {
         String violations = ex.getConstraintViolations().stream()
                 .map(v -> v.getPropertyPath() + ": " + v.getMessage())
                 .reduce((a, b) -> a + "; " + b)
-                .orElse("Validation failed");
+                .orElse("Validazione fallita");
 
         log.warn("Entity validation failed: {}", violations);
         ErrorResponseDto body = new ErrorResponseDto(
@@ -67,7 +67,7 @@ public class GlobalExceptionHandler {
         log.error("Unexpected error", ex);
         ErrorResponseDto body = new ErrorResponseDto(
                 LocalDateTime.now(), HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                "INTERNAL_ERROR", "An unexpected technical error occurred. Please try again later.");
+                "INTERNAL_ERROR", "Si è verificato un errore tecnico imprevisto. Riprova più tardi.");
         return ResponseEntity.internalServerError()
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body);

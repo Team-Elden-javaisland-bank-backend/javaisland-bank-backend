@@ -53,7 +53,7 @@ public class AccountController {
                                                   @Valid @RequestBody CloseAccountRequestDto request) {
         Long userId = getUserId(jwt);
         accountService.requestClosure(userId, request.getAccountNumber());
-        return ResponseEntity.ok("Closure request submitted. An employee will review it shortly.");
+        return ResponseEntity.ok("Richiesta di chiusura inviata. Un impiegato la esaminerà a breve.");
     }
 
     @GetMapping("/last-active-check")

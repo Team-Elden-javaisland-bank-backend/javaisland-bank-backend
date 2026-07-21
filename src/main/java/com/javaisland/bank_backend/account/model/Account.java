@@ -38,6 +38,12 @@ public class Account {
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
+    @Column(name = "closure_requested_at")
+    private LocalDateTime closureRequestedAt;
+
+    @Column(name = "closure_rejected_at")
+    private LocalDateTime closureRejectedAt;
+
     @Column(name = "source_account_number", length = 50)
     private String sourceAccountNumber;
 

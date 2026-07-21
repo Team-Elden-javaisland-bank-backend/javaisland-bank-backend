@@ -10,15 +10,15 @@ import java.time.LocalDate;
 @Data
 public class TransferRequestDto {
 
-    @NotBlank(message = "Source account number is required")
+    @NotBlank(message = "Il numero del conto sorgente è obbligatorio")
     private String sourceAccountNumber;
 
     private String destinationAccountNumber;
 
     private Long beneficiaryId;
 
-    @NotNull(message = "Amount is required")
-    @DecimalMin(value = "0.01", message = "Amount must be positive")
+    @NotNull(message = "L'importo è obbligatorio")
+    @DecimalMin(value = "0.01", message = "L'importo deve essere positivo")
     private BigDecimal amount;
 
     private String description;

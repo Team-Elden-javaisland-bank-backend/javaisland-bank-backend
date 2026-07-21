@@ -33,7 +33,7 @@ public class TransactionController {
                                            @Valid @RequestBody TransactionRequestDto request) {
         Long userId = getUserId(jwt);
         transactionService.deposit(userId, request);
-        return ResponseEntity.ok(Map.of("message", "Deposit completed."));
+        return ResponseEntity.ok(Map.of("message", "Deposito completato."));
     }
 
     @PostMapping("/withdraw")
@@ -41,7 +41,7 @@ public class TransactionController {
                                             @Valid @RequestBody TransactionRequestDto request) {
         Long userId = getUserId(jwt);
         transactionService.withdraw(userId, request);
-        return ResponseEntity.ok(Map.of("message", "Withdrawal completed."));
+        return ResponseEntity.ok(Map.of("message", "Prelievo completato."));
     }
 
     @PostMapping("/transfer")
@@ -76,7 +76,7 @@ public class TransactionController {
             @PathVariable Long transactionId) {
         Long userId = getUserId(jwt);
         transactionService.cancelPendingTransaction(userId, transactionId);
-        return ResponseEntity.ok(Map.of("message", "Transaction cancelled."));
+        return ResponseEntity.ok(Map.of("message", "Transazione annullata."));
     }
 
     private Long getUserId(Jwt jwt) {

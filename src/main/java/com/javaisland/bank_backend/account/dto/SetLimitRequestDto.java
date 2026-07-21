@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 @Data
 public class SetLimitRequestDto {
 
-    @NotNull(message = "Amount is required")
-    @DecimalMin(value = "0.01", message = "Amount must be positive")
+    @NotNull(message = "L'importo è obbligatorio")
+    @DecimalMin(value = "0.01", message = "L'importo deve essere positivo")
     private BigDecimal maxAmount;
 }

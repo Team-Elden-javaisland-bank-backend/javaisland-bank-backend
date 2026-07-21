@@ -108,4 +108,7 @@ public class User {
 
     @Column(name = "limits_setup_complete", nullable = false)
     private boolean limitsSetupComplete = false;
+
+    @Column(name = "password_changed_at")
+    private LocalDateTime passwordChangedAt;
 }

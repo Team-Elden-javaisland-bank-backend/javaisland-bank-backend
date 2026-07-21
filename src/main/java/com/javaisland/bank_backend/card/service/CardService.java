@@ -8,6 +8,7 @@ import com.javaisland.bank_backend.card.repository.CardRepository;
 import com.javaisland.bank_backend.card.repository.CardStatusRepository;
 import com.javaisland.bank_backend.card.repository.CardTypeRepository;
 import com.javaisland.bank_backend.exception.ApiBankException;
+import com.javaisland.bank_backend.notification.service.NotificationService;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,18 +24,21 @@ public class CardService {
     private final CardTypeRepository cardTypeRepository;
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
     private final Random random = new Random();
 
     public CardService(CardRepository cardRepository,
                        CardStatusRepository cardStatusRepository,
                        CardTypeRepository cardTypeRepository,
                        AccountRepository accountRepository,
-                       UserRepository userRepository) {
+                       UserRepository userRepository,
+                       NotificationService notificationService) {
         this.cardRepository = cardRepository;
         this.cardStatusRepository = cardStatusRepository;
         this.cardTypeRepository = cardTypeRepository;
         this.accountRepository = accountRepository;
         this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
 
     public Card issueDebitCard(Long accountId, String holderName) {
@@ -91,7 +95,29 @@ public class CardService {
                 .orElseThrow(() -> new ApiBankException("Stato carta '" + newStatusName + "' non valido."));
 
         card.setStatus(newStatus);
-        return cardRepository.save(card);
+        Card saved = cardRepository.save(card);
+        if ("BLOCKED".equals(newStatusName)) {
+            accountRepository.findById(card.getAccountId()).ifPresent(account ->
+                notificationService.send(account.getUser().getId(), "CARD", "La carta terminata in " + card.getCardNumber().substring(12) + " è stata bloccata.")
+            );
+        }
+        return saved;
+    }
+
+    @Transactional
+    public Card unblockCard(Long cardId) {
+        Card card = cardRepository.findById(cardId)
+                .orElseThrow(() -> new ApiBankException("Carta non trovata con questo ID."));
+
+        var activeStatus = cardStatusRepository.findByStatusName("ACTIVE")
+                .orElseThrow(() -> new ApiBankException("Stato carta ACTIVE non configurato."));
+
+        card.setStatus(activeStatus);
+        Card saved = cardRepository.save(card);
+        accountRepository.findById(card.getAccountId()).ifPresent(account ->
+            notificationService.send(account.getUser().getId(), "CARD", "La carta " + card.getCardNumber().substring(12) + " è stata sbloccata.")
+        );
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -156,6 +182,16 @@ public class CardService {
         var card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new ApiBankException("Carta non trovata.", "CARD_NOT_FOUND"));
         return toDto(card);
+    }
+
+    @Transactional(readOnly = true)
+    public CardSensitiveDto getCardSensitiveByCardId(Long cardId) {
+        var card = cardRepository.findById(cardId)
+                .orElseThrow(() -> new ApiBankException("Carta non trovata.", "CARD_NOT_FOUND"));
+        return CardSensitiveDto.builder()
+                .cardNumber(card.getCardNumber())
+                .cvv(card.getCvv())
+                .build();
     }
 
     private CardResponseDto toDto(Card card) {

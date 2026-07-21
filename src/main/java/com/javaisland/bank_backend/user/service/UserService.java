@@ -8,6 +8,7 @@ import com.javaisland.bank_backend.auth.service.KeycloakAdminService;
 import com.javaisland.bank_backend.audit.service.AuditLogService;
 import com.javaisland.bank_backend.card.service.CardService;
 import com.javaisland.bank_backend.exception.ApiBankException;
+import com.javaisland.bank_backend.notification.service.NotificationService;
 import com.javaisland.bank_backend.user.dto.CustomerListItemDto;
 import com.javaisland.bank_backend.user.dto.PendingRegistrationDto;
 import com.javaisland.bank_backend.user.model.User;
@@ -36,6 +37,7 @@ public class UserService {
     private final CardService cardService;
     private final KeycloakAdminService keycloakAdminService;
     private final AuditLogService auditLogService;
+    private final NotificationService notificationService;
 
     public UserService(UserRepository userRepository,
                        UserStatusRepository userStatusRepository,
@@ -44,7 +46,8 @@ public class UserService {
                        AccountService accountService,
                        CardService cardService,
                        KeycloakAdminService keycloakAdminService,
-                       AuditLogService auditLogService) {
+                       AuditLogService auditLogService,
+                       NotificationService notificationService) {
         this.userRepository = userRepository;
         this.userStatusRepository = userStatusRepository;
         this.roleTypeRepository = roleTypeRepository;
@@ -53,6 +56,7 @@ public class UserService {
         this.cardService = cardService;
         this.keycloakAdminService = keycloakAdminService;
         this.auditLogService = auditLogService;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -112,6 +116,7 @@ public class UserService {
             cardService.issueDebitCard(account.getId(), user.getFirstName() + " " + user.getLastName(), "ACTIVE");
             auditLogService.log("REGISTRATION", userId, "VALIDATE", "system",
                     "Registrazione approvata: " + user.getFirstName() + " " + user.getLastName());
+            notificationService.send(userId, "ACCOUNT", "Registrazione approvata! Il tuo conto è attivo.");
         } catch (Exception e) {
             if (keycloakId != null) {
                 keycloakAdminService.deleteUser(keycloakId);
@@ -138,6 +143,7 @@ public class UserService {
         userRepository.save(user);
         auditLogService.log("REGISTRATION", userId, "REJECT", "system",
                 "Registrazione rifiutata: " + user.getFirstName() + " " + user.getLastName());
+        notificationService.send(userId, "ACCOUNT", "La tua registrazione è stata rifiutata.");
         log.info("Employee rejected registration for user id={}", userId);
     }
 

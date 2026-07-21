@@ -33,37 +33,37 @@ public class EmployeeAccountController {
     @PutMapping("/{accountNumber}/activate")
     public ResponseEntity<String> activate(@PathVariable String accountNumber) {
         accountService.activateAccount(accountNumber);
-        return ResponseEntity.ok("Account " + accountNumber + " activated.");
+        return ResponseEntity.ok("Conto " + accountNumber + " attivato.");
     }
 
     @PutMapping("/{accountNumber}/reject")
     public ResponseEntity<String> reject(@PathVariable String accountNumber) {
         accountService.rejectAccountRequest(accountNumber);
-        return ResponseEntity.ok("Account " + accountNumber + " request rejected.");
+        return ResponseEntity.ok("Richiesta conto " + accountNumber + " rifiutata.");
     }
 
     @PutMapping("/{accountNumber}/closure/validate")
     public ResponseEntity<String> validateClosure(@PathVariable String accountNumber) {
         accountService.validateClosure(accountNumber);
-        return ResponseEntity.ok("Account " + accountNumber + " closed.");
+        return ResponseEntity.ok("Conto " + accountNumber + " chiuso.");
     }
 
     @PutMapping("/{accountNumber}/closure/reject")
     public ResponseEntity<String> rejectClosure(@PathVariable String accountNumber) {
         accountService.rejectClosure(accountNumber);
-        return ResponseEntity.ok("Closure request rejected, account " + accountNumber + " is active again.");
+        return ResponseEntity.ok("Richiesta di chiusura rifiutata, conto " + accountNumber + " di nuovo attivo.");
     }
 
     @PutMapping("/{accountNumber}/freeze")
     public ResponseEntity<String> freeze(@PathVariable String accountNumber) {
         accountService.freezeAccount(accountNumber);
-        return ResponseEntity.ok("Account " + accountNumber + " frozen.");
+        return ResponseEntity.ok("Conto " + accountNumber + " congelato.");
     }
 
     @PutMapping("/{accountNumber}/unfreeze")
     public ResponseEntity<String> unfreeze(@PathVariable String accountNumber) {
         accountService.unfreezeAccount(accountNumber);
-        return ResponseEntity.ok("Account " + accountNumber + " unfrozen.");
+        return ResponseEntity.ok("Conto " + accountNumber + " scongelato.");
     }
 
     @GetMapping("/{accountNumber}")

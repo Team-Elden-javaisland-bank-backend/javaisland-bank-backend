@@ -162,6 +162,31 @@ public class KeycloakAdminService {
         log.info("Assigned realm role '{}' to Keycloak user {}", roleName, keycloakId);
     }
 
+    public void resetPassword(String keycloakId, String newPassword) {
+        String adminToken = getAdminToken();
+        String resetUrl = keycloakAuthUrl + "/admin/realms/" + keycloakRealm
+                + "/users/" + keycloakId + "/reset-password";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(adminToken);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("type", "password");
+        body.put("value", newPassword);
+        body.put("temporary", false);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+        try {
+            restTemplate.exchange(resetUrl, HttpMethod.PUT, entity, Void.class);
+            log.info("Keycloak password reset for user {}", keycloakId);
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to reset Keycloak password for {}: status={}", keycloakId, e.getStatusCode());
+            throw new ApiBankException("Reset password Keycloak fallito.", "KEYCLOAK_PASSWORD_RESET_FAILED");
+        }
+    }
+
     public void deleteUser(String keycloakId) {
         String adminToken = getAdminToken();
         String deleteUrl = keycloakAuthUrl + "/admin/realms/" + keycloakRealm + "/users/" + keycloakId;
@@ -176,6 +201,24 @@ public class KeycloakAdminService {
             log.info("Keycloak user deleted: {}", keycloakId);
         } catch (HttpClientErrorException e) {
             log.warn("Failed to delete Keycloak user {}: status={}", keycloakId, e.getStatusCode());
+        }
+    }
+
+    public void logoutUser(String keycloakId) {
+        String adminToken = getAdminToken();
+        String logoutUrl = keycloakAuthUrl + "/admin/realms/" + keycloakRealm
+                + "/users/" + keycloakId + "/logout";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(adminToken);
+
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+        try {
+            restTemplate.exchange(logoutUrl, HttpMethod.POST, entity, Void.class);
+            log.info("Keycloak sessions invalidated for user {}", keycloakId);
+        } catch (HttpClientErrorException e) {
+            log.warn("Failed to logout Keycloak user {}: status={}", keycloakId, e.getStatusCode());
         }
     }
 }

@@ -42,7 +42,7 @@ public class BeneficiaryController {
                                           @PathVariable Long id) {
         Long userId = getUserId(jwt);
         beneficiaryService.delete(userId, id);
-        return ResponseEntity.ok("Beneficiary removed.");
+        return ResponseEntity.ok("Beneficiario rimosso.");
     }
 
     @GetMapping("/check")
