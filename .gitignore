@@ -42,3 +42,6 @@ keycloak-realm-export.json
 *.log
 ng-serve-err.log
 ng-serve.log
+
+### Uploads ###
+uploads/

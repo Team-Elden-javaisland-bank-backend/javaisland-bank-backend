@@ -9,7 +9,7 @@ services:
                         POSTGRES_USER: bank_admin
                         POSTGRES_PASSWORD: bank_password
                 ports:
-                        - "5432:5432"
+                        - "5433:5432"
                 volumes:
                         - javaisland-bank-backend-main_postgres_data:/var/lib/postgresql/data
 

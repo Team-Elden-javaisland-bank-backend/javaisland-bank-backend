@@ -41,9 +41,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/v1/auth/register",
-                                "/api/v1/auth/keycloak-login",
-                                "/api/v1/comuni").permitAll()
-                        .requestMatchers("/pin/setup", "/pin/status", "/pin/verify").permitAll()
+                                "/api/v1/auth/keycloak-login").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

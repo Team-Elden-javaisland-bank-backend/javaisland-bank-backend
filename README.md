@@ -1,53 +1,53 @@
 # EldenBank — Backend
 
-API REST per gestione servizi bancari digitali.
+REST API for digital banking services.
 
 **Spring Boot 3.4** · **Spring Security 6** · **Keycloak JWT** · **PostgreSQL 15** · **Springdoc OpenAPI 2.8**
 
 ---
 
-## Indice
+## Table of Contents
 
-1. [Architettura](#1-architettura)
-2. [Stack Tecnologico](#2-stack-tecnologico)
-3. [Struttura Progetto](#3-struttura-progetto)
-4. [Schema Database](#4-schema-database)
-5. [Prerequisiti](#5-prerequisiti)
-6. [Avvio Locale](#6-avvio-locale)
-7. [Autenticazione](#7-autenticazione)
+1. [Architecture](#1-architecture)
+2. [Tech Stack](#2-tech-stack)
+3. [Project Structure](#3-project-structure)
+4. [Database Schema](#4-database-schema)
+5. [Prerequisites](#5-prerequisites)
+6. [Local Setup](#6-local-setup)
+7. [Authentication](#7-authentication)
 8. [API Endpoints](#8-api-endpoints)
-9. [Gestione Errori](#9-gestione-errori)
+9. [Error Handling](#9-error-handling)
 10. [Feature Overview](#10-feature-overview)
-11. [Esempi Test](#11-esempi-test)
+11. [Test Examples](#11-test-examples)
 
 ---
 
-## 1. Architettura
+## 1. Architecture
 
-- **Monolite** Spring Boot con esposizione REST
-- **Autenticazione**: JWT Bearer tramite Keycloak (OAuth2 Resource Server)
-- **Database**: PostgreSQL 15 con schema normalizzato (tabelle lookup referenziate via FK)
-- **Documentazione API**: Springdoc OpenAPI 2.8 (Swagger UI integrata)
-- **Organizzazione**: Screaming Architecture — package per dominio (`account`, `user`, `card`, `transaction`)
-- **Container**: Docker Compose per PostgreSQL e Keycloak
+- **Monolith** Spring Boot with REST endpoints
+- **Authentication**: JWT Bearer via Keycloak (OAuth2 Resource Server)
+- **Database**: PostgreSQL 15 with normalized schema (lookup tables referenced via FK)
+- **API Docs**: Springdoc OpenAPI 2.8 (Swagger UI integrated)
+- **Organization**: Screaming Architecture — packages per domain (`account`, `user`, `card`, `transaction`)
+- **Containers**: Docker Compose for PostgreSQL and Keycloak
 
-### Decisioni Architetturali
+### Architectural Decisions
 
-| Scelta | Motivazione |
+| Choice | Rationale |
 |---|---|
-| Screaming Architecture | Ogni feature ha model, repository, service, DTO e controller propri. Riflette il dominio bancario. |
-| Tabelle di Dominio (Lookup) | Stati e tipologie su tabelle dedicate referenziate via FK. Integrità referenziale, no stringhe duplicate, estensibile senza modificare codice Java. |
-| DataInitializer | Seed automatico tabelle di dominio al primo avvio. Idempotente (conta righe prima di inserire). |
-| JWT via Keycloak | OAuth2 standard, JWK rotation automatica, SSO-ready, ruoli mappati su realm roles. |
-| GlobalExceptionHandler | Gestione centralizzata errori business (`ApiBankException`), validazione (`MethodArgumentNotValidException`), vincoli JPA e fallback generico. |
-| DTO con Validazione | Ogni endpoint usa DTO dedicati con vincoli `jakarta.validation`. Nessuna entity esposta direttamente. |
-| Lombok | Riduzione boilerplate (getter, setter, builder, costruttori). |
+| Screaming Architecture | Each feature has its own model, repository, service, DTOs, and controller. Reflects the banking domain. |
+| Lookup Tables | Statuses and types in dedicated tables referenced via FK. Referential integrity, no duplicate strings, extensible without changing Java code. |
+| DataInitializer | Automatic domain table seeding on first startup. Idempotent (checks row count before inserting). |
+| JWT via Keycloak | OAuth2 standard, automatic JWK rotation, SSO-ready, roles mapped via realm roles. |
+| GlobalExceptionHandler | Centralized error handling for business errors (`ApiBankException`), validation (`MethodArgumentNotValidException`), JPA constraint violations, and generic fallback. |
+| DTOs with Validation | Every endpoint uses dedicated DTOs with `jakarta.validation` constraints. No entity exposed directly. |
+| Lombok | Boilerplate reduction (getter, setter, builder, constructors). |
 
 ---
 
-## 2. Stack Tecnologico
+## 2. Tech Stack
 
-| Componente | Tecnologia | Versione |
+| Component | Technology | Version |
 |---|---|---|
 | Framework | Spring Boot | 3.4.2 |
 | Language | Java | 21+ |
@@ -62,27 +62,27 @@ API REST per gestione servizi bancari digitali.
 
 ---
 
-## 3. Struttura Progetto
+## 3. Project Structure
 
 ```
 bank-backend/
 ├── docker-compose.yml                  # PostgreSQL + Keycloak
 ├── pom.xml                             # Maven dependencies
 ├── mvnw / mvnw.cmd                     # Maven Wrapper
-├── database-schema.txt                 # Schema DB in formato DBML
-├── endpoints.txt                       # Elenco API endpoints
-├── admin-jwt.txt                       # JWT pre-generato per admin
 │
 └── src/main/java/com/javaisland/bank_backend/
     ├── BankBackendApplication.java
     │
-    ├── account/                         # Conti correnti
+    ├── account/                         # Bank accounts
     │   ├── controller/
     │   │   └── AccountController.java
     │   ├── dto/
+    │   │   ├── AccountHolderDto.java
     │   │   ├── AccountLimitResponseDto.java
     │   │   ├── AccountResponseDto.java
     │   │   ├── CloseAccountRequestDto.java
+    │   │   ├── EmployeeUserDetailDto.java
+    │   │   ├── MonthlySummaryDto.java
     │   │   ├── OpenAccountRequestDto.java
     │   │   └── SetLimitRequestDto.java
     │   ├── model/
@@ -99,7 +99,32 @@ bank-backend/
     │       ├── AccountLimitService.java
     │       └── AccountService.java
     │
-    ├── auth/                            # Autenticazione
+    ├── admin/                           # Admin management
+    │   ├── controller/
+    │   │   ├── AdminAuditLogController.java
+    │   │   ├── AdminDashboardController.java
+    │   │   ├── AdminEmployeeController.java
+    │   │   └── AdminLimitController.java
+    │   ├── dto/
+    │   │   ├── AdminDashboardDto.java
+    │   │   ├── CreateEmployeeRequestDto.java
+    │   │   ├── EmployeeDetailDto.java
+    │   │   └── EmployeeListItemDto.java
+    │   └── service/
+    │       ├── AdminDashboardService.java
+    │       └── AdminEmployeeService.java
+    │
+    ├── audit/                           # Audit logging
+    │   ├── dto/
+    │   │   └── AuditLogDto.java
+    │   ├── model/
+    │   │   └── AuditLog.java
+    │   ├── repository/
+    │   │   └── AuditLogRepository.java
+    │   └── service/
+    │       └── AuditLogService.java
+    │
+    ├── auth/                            # Authentication
     │   ├── controller/
     │   │   └── AuthController.java
     │   ├── dto/
@@ -110,7 +135,7 @@ bank-backend/
     │       ├── KeycloakAdminService.java
     │       └── RegistrationService.java
     │
-    ├── beneficiary/                     # Rubrica beneficiari
+    ├── beneficiary/                     # Beneficiary contacts
     │   ├── controller/
     │   │   └── BeneficiaryController.java
     │   ├── dto/
@@ -123,13 +148,14 @@ bank-backend/
     │   └── service/
     │       └── BeneficiaryService.java
     │
-    ├── card/                            # Carte
+    ├── card/                            # Bank cards
     │   ├── controller/
     │   │   ├── CardController.java
     │   │   ├── CustomerCardController.java
     │   │   └── EmployeeCardController.java
     │   ├── dto/
-    │   │   └── CardResponseDto.java
+    │   │   ├── CardResponseDto.java
+    │   │   └── CardSensitiveDto.java
     │   ├── model/
     │   │   ├── Card.java
     │   │   ├── CardStatus.java
@@ -141,27 +167,64 @@ bank-backend/
     │   └── service/
     │       └── CardService.java
     │
+    ├── comuni/                          # Italian municipality lookup
+    │   ├── controller/
+    │   │   └── ComuniController.java
+    │   ├── dto/
+    │   │   └── ComuneDto.java
+    │   └── service/
+    │       └── ComuniService.java
+    │
     ├── common/
-    │   └── PageResponseDto.java         # Wrapper paginazione generico
+    │   └── PageResponseDto.java         # Generic pagination wrapper
     │
     ├── config/
-    │   ├── DataInitializer.java         # Seed tabelle di dominio
-    │   └── OpenAPIConfig.java           # Swagger/OpenAPI config
+    │   ├── DataInitializer.java         # Domain table seeding
+    │   ├── OpenAPIConfig.java           # Swagger/OpenAPI config
+    │   └── WebMvcConfig.java            # CORS + static resource config
     │
-    ├── employee/                        # Endpoint dipendenti
-    │   └── controller/
-    │       ├── EmployeeAccountController.java
-    │       └── EmployeeUserController.java
+    ├── employee/                        # Employee endpoints
+    │   ├── controller/
+    │   │   ├── EmployeeAccountController.java
+    │   │   └── EmployeeUserController.java
+    │   └── dto/
+    │       └── EmployeeRequestDto.java
     │
     ├── exception/                       # Error handling
     │   ├── ApiBankException.java
     │   └── GlobalExceptionHandler.java
     │
-    ├── security/                        # Sicurezza JWT
+    ├── notification/                    # Notifications
+    │   ├── controller/
+    │   │   └── NotificationController.java
+    │   ├── dto/
+    │   │   └── NotificationDto.java
+    │   ├── model/
+    │   │   └── Notification.java
+    │   ├── repository/
+    │   │   └── NotificationRepository.java
+    │   └── service/
+    │       └── NotificationService.java
+    │
+    ├── savedbeneficiary/                # Saved beneficiaries
+    │   ├── controller/
+    │   │   └── SavedBeneficiaryController.java
+    │   ├── dto/
+    │   │   ├── SavedBeneficiaryRequestDto.java
+    │   │   └── SavedBeneficiaryResponseDto.java
+    │   ├── model/
+    │   │   └── SavedBeneficiary.java
+    │   ├── repository/
+    │   │   └── SavedBeneficiaryRepository.java
+    │   └── service/
+    │       └── SavedBeneficiaryService.java
+    │
+    ├── security/                        # JWT security
     │   ├── AppRoleConverter.java
+    │   ├── JwtPasswordChangeFilter.java
     │   └── SecurityConfig.java
     │
-    ├── transaction/                     # Transazioni
+    ├── transaction/                     # Transactions
     │   ├── controller/
     │   │   └── TransactionController.java
     │   ├── dto/
@@ -177,45 +240,65 @@ bank-backend/
     │   │   ├── TransactionSpecifications.java
     │   │   ├── TransactionStatusRepository.java
     │   │   └── TransactionTypeRepository.java
+    │   ├── scheduler/
+    │   │   └── ScheduledTransferProcessor.java
     │   └── service/
     │       └── TransactionService.java
     │
-    ├── user/                            # Utenti
+    ├── user/                            # Users
     │   ├── controller/
-    │   │   └── UserController.java
+    │   │   ├── CustomerProfileController.java
+    │   │   ├── CustomerRequestController.java
+    │   │   ├── PasswordChangeController.java
+    │   │   ├── ProfilePictureController.java
+    │   │   ├── UserController.java
+    │   │   └── UserPinController.java
     │   ├── dto/
     │   │   ├── CustomerListItemDto.java
+    │   │   ├── CustomerProfileDto.java
+    │   │   ├── CustomerRequestDto.java
+    │   │   ├── PasswordChangeRequestCreateDto.java
+    │   │   ├── PasswordChangeRequestDto.java
     │   │   ├── PendingRegistrationDto.java
+    │   │   ├── PinSetupRequestDto.java
+    │   │   ├── PinStatusResponseDto.java
+    │   │   ├── PinVerifyRequestDto.java
     │   │   └── UserResponseDto.java
     │   ├── model/
+    │   │   ├── PasswordChangeRequest.java
     │   │   ├── RoleType.java
     │   │   ├── User.java
+    │   │   ├── UserPin.java
     │   │   └── UserStatus.java
     │   ├── repository/
+    │   │   ├── PasswordChangeRequestRepository.java
     │   │   ├── RoleTypeRepository.java
+    │   │   ├── UserPinRepository.java
     │   │   ├── UserRepository.java
     │   │   └── UserStatusRepository.java
     │   └── service/
+    │       ├── PasswordChangeService.java
+    │       ├── UserPinService.java
     │       └── UserService.java
     │
     └── validation/
-        ├── Adult.java                   # Validazione anagrafica maggiorenne
+        ├── Adult.java                   # Adult age validation
         └── AdultValidator.java
 ```
 
 ---
 
-## 4. Schema Database
+## 4. Database Schema
 
-### Tabelle di Dominio (Lookup)
+### Lookup Tables
 
-Popolate automaticamente da `DataInitializer` al primo avvio.
-Schema completo in [database-schema.txt](database-schema.txt).
+Auto-populated by `DataInitializer` on first startup.
+Full schema in [database-schema.txt](database-schema.txt).
 
-| Tabella | Valori Seed |
+| Table | Seed Values |
 |---|---|
 | `user_statuses` | PENDING, ACTIVE, ANNULLED, SUSPENDED |
-| `role_types` | C (customer), D (dipendente) |
+| `role_types` | C (customer), D (employee), A (admin) |
 | `account_statuses` | INACTIVE, ACTIVE, FROZEN, CLOSED |
 | `card_statuses` | INACTIVE, ACTIVE, BLOCKED |
 | `card_types` | DEBIT, CREDIT |
@@ -223,64 +306,67 @@ Schema completo in [database-schema.txt](database-schema.txt).
 | `transaction_types` | DEPOSIT, WITHDRAWAL, TRANSFER, INITIAL_TRANSFER |
 | `transaction_statuses` | PENDING, COMPLETED, FAILED, REJECTED |
 
-### Tabelle Principali
+### Main Tables
 
-| Tabella | Descrizione |
+| Table | Description |
 |---|---|
-| `users` | Correntisti e dipendenti. FK → `user_statuses`, `role_types` |
-| `accounts` | Conti correnti. FK → `users` |
-| `account_limits` | Massimali operativi per conto. FK → `accounts`, `limit_types`, unique(account_id, limit_type_id) |
-| `cards` | Carte di debito/credito. FK → `card_statuses`, `card_types` |
-| `beneficiaries` | Rubrica beneficiari per bonifici. FK → `users`, unique(user_id, destination_account_number) |
-| `transactions` | Movimenti contabili. FK → `transaction_types`, `transaction_statuses` |
+| `users` | Customers and employees. FK → `user_statuses`, `role_types` |
+| `accounts` | Bank accounts. FK → `users` |
+| `account_limits` | Per-account operational limits. FK → `accounts`, `limit_types`, unique(account_id, limit_type_id) |
+| `cards` | Debit/credit cards. FK → `card_statuses`, `card_types` |
+| `beneficiaries` | Contact list for transfers. FK → `users`, unique(user_id, destination_account_number) |
+| `saved_beneficiaries` | Saved beneficiaries for quick transfers. FK → `users` |
+| `transactions` | Account movements. FK → `transaction_types`, `transaction_statuses` |
+| `notifications` | User notifications. FK → `users` |
+| `audit_logs` | System audit trail |
 
 ---
 
-## 5. Prerequisiti
+## 5. Prerequisites
 
 - **Java 21+** (JDK)
-- **Maven 3.9+** (wrapper `mvnw` incluso)
-- **Docker Desktop** (per PostgreSQL e Keycloak)
+- **Maven 3.9+** (wrapper `mvnw` included)
+- **Docker Desktop** (for PostgreSQL and Keycloak)
 
 ---
 
-## 6. Avvio Locale
+## 6. Local Setup
 
-### 6.1. Avvia infrastruttura
+### 6.1. Start infrastructure
 
 ```bash
 docker compose up -d
 ```
 
-Avvia:
-- **PostgreSQL** su `localhost:5432` (db: `javaisland_backend`, user: `bank_admin`, password: `bank_password`)
-- **Keycloak** su `localhost:8080` (admin / admin)
+Starts:
+- **PostgreSQL** on `localhost:5433` (db: `javaisland_backend`, user: `bank_admin`, password: `bank_password`)
+- **Keycloak** on `localhost:8080` (admin / admin)
 
-### 6.2. Importa realm Keycloak
+### 6.2. Import Keycloak realm
 
-1. Accedi a `http://localhost:8080` (admin / admin)
-2. **Create Realm** → nome: `javaisland-realm`
+1. Go to `http://localhost:8080` (admin / admin)
+2. **Create Realm** → name: `javaisland-realm`
 3. **Clients** → **Create client**:
    - Client ID: `bank-backend`
    - Client authentication: `OFF`
    - Standard flow: `OFF`
    - Direct access grants: `ON`
 4. **Realm roles** → Create: `C`, `D`
-5. Crea utenti e mappa i ruoli
+5. Create users and assign roles
 
-### 6.3. Avvia applicazione
+### 6.3. Start application
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-Applicazione su **`http://localhost:8081`**.
+Application runs on **`http://localhost:8081`**.
 
-Al primo avvio: tabelle di dominio create e popolate automaticamente.
+On first startup: domain tables are created and populated automatically.
 
 ---
 
-## 7. Autenticazione
+## 7. Authentication
 
 JWT Bearer via Keycloak OAuth2 Direct Access Grant.
 
@@ -288,7 +374,7 @@ JWT Bearer via Keycloak OAuth2 Direct Access Grant.
 
 ```
 Client → POST /api/v1/auth/keycloak-login → Keycloak → access_token
-Client → Bearer token → App → Keycloak JWK → validazione → ruoli
+Client → Bearer token → App → Keycloak JWK → validation → roles
 ```
 
 ### Login
@@ -303,7 +389,7 @@ Content-Type: application/json
 }
 ```
 
-### Risposta
+### Response
 
 ```json
 {
@@ -316,14 +402,15 @@ Content-Type: application/json
 }
 ```
 
-### Ruoli
+### Roles
 
-| Ruolo | Descrizione | Endpoint |
+| Role | Description | Endpoints |
 |---|---|---|
-| `C` | Customer (correntista) | Account, Transazioni, Carte (lettura) |
-| `D` | Employee (dipendente) | Gestione utenti, conti, carte, admin |
+| `C` | Customer | Accounts, Transactions, Cards (read), Beneficiaries, Saved Beneficiaries |
+| `D` | Employee | User management, accounts, cards, admin |
+| `A` | Admin | Dashboard, employee management, audit logs, limits |
 
-### Configurazione
+### Configuration
 
 ```yaml
 app:
@@ -338,104 +425,164 @@ keycloak:
   admin-password: admin
 ```
 
-Variabili d'ambiente disponibili: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`.
+Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`.
 
 ---
 
 ## 8. API Endpoints
 
-Totale: **36 endpoints** (2 pubblici, 15 customer, 18 employee, 1 export)
+### Public — `/api/v1/auth`
 
-### Pubblici — `/api/v1/auth`
-
-| Metodo | Path | Descrizione |
+| Method | Path | Description |
 |---|---|---|
-| POST | `/register` | Registrazione nuovo utente (stato PENDING) |
-| POST | `/keycloak-login` | Login Keycloak, ritorna JWT + profilo |
+| POST | `/register` | Register new user (status PENDING) |
+| POST | `/keycloak-login` | Keycloak login, returns JWT + profile |
 
-### Customer — Account — `/api/v1/customer/accounts` `[C]`
+### Customer — Accounts — `/api/v1/customer/accounts` `[C]`
 
-| Metodo | Path | Descrizione |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/` | Lista tutti i miei conti |
-| POST | `/open` | Apri conto aggiuntivo (con bonifico iniziale) |
-| POST | `/closure-request` | Richiedi chiusura conto |
-| GET | `/{accountNumber}` | Dettaglio conto (balance, stato, data) |
-| GET | `/{accountNumber}/limits` | Visualizza massimali del conto |
+| GET | `/` | List all my accounts |
+| GET | `/holder-info` | Account holder info for dashboard |
+| GET | `/monthly-summary` | Monthly transaction summary |
+| POST | `/open` | Open additional account (with initial transfer) |
+| POST | `/closure-request` | Request account closure |
+| GET | `/{accountNumber}` | Account detail (balance, status, date) |
+| GET | `/{accountNumber}/limits` | View account limits |
 
-### Customer — Transazioni — `/api/v1/customer/transactions` `[C]`
+### Customer — Transactions — `/api/v1/customer/transactions` `[C]`
 
-| Metodo | Path | Descrizione |
+| Method | Path | Description |
 |---|---|---|
-| POST | `/deposit` | Versamento su proprio conto |
-| POST | `/withdraw` | Prelievo da proprio conto |
-| POST | `/transfer` | Bonifico verso altro conto (o beneficiario salvato) |
-| GET | `/recent/{accountNumber}` | Ultime 10 transazioni |
-| GET | `/all?start=&end=&page=&size=` | Storico paginato con filtri data |
+| POST | `/deposit` | Deposit to own account |
+| POST | `/withdraw` | Withdraw from own account |
+| POST | `/transfer` | Transfer to another account (or saved beneficiary) |
+| GET | `/recent/{accountNumber}` | Last 10 transactions |
+| GET | `/all?start=&end=&page=&size=` | Paginated history with date filters |
 
-### Customer — Carte — `/api/v1/customer/cards` `[C]`
+### Customer — Cards — `/api/v1/customer/cards` `[C]`
 
-| Metodo | Path | Descrizione |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/` | Lista tutte le mie carte |
-| GET | `/{cardId}` | Dettaglio carta |
+| GET | `/` | List all my cards |
+| GET | `/{cardId}` | Card detail |
 
-### Customer — Beneficiari — `/api/v1/customer/beneficiaries` `[C]`
+### Customer — Beneficiaries — `/api/v1/customer/beneficiaries` `[C]`
 
-| Metodo | Path | Descrizione |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/` | Lista miei beneficiari salvati |
-| POST | `/` | Salva nuovo beneficiario (nickname + IBAN) |
-| DELETE | `/{id}` | Rimuovi beneficiario |
+| GET | `/` | List my saved beneficiaries |
+| POST | `/` | Save new beneficiary (nickname + IBAN) |
+| DELETE | `/{id}` | Remove beneficiary |
 
-### Employee — Account — `/api/v1/employee/accounts` `[D]`
+### Customer — Saved Beneficiaries — `/api/v1/customer/saved-beneficiaries` `[C]`
 
-| Metodo | Path | Descrizione |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/` | Lista tutti i conti (`?status=` opzionale) |
-| GET | `/user/{userId}` | Conti per utente specifico |
-| GET | `/{accountNumber}` | Dettaglio conto |
-| PUT | `/{accountNumber}/activate` | Attiva conto (INACTIVE → ACTIVE) |
-| PUT | `/{accountNumber}/freeze` | Congela conto (ACTIVE → FROZEN) |
-| PUT | `/{accountNumber}/closure/validate` | Valida chiusura (FROZEN → CLOSED) |
-| PUT | `/{accountNumber}/closure/reject` | Rifiuta chiusura (FROZEN → ACTIVE) |
-| GET | `/{accountNumber}/limits` | Visualizza massimali del conto |
-| PUT | `/{accountNumber}/limits/{limitType}` | Imposta massimale (es. DAILY_TRANSFER, SINGLE_TRANSFER) |
+| GET | `/` | List saved beneficiaries |
+| POST | `/` | Save new beneficiary |
+| DELETE | `/{id}` | Remove saved beneficiary |
 
-### Employee — Utenti — `/api/v1/employee/users` `[D]`
+### Customer — Profile — `/api/v1/profile-picture` `[C]`
 
-| Metodo | Path | Descrizione |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/registrations/pending` | Registrazioni in attesa di validazione |
-| PUT | `/registrations/{userId}/validate` | Valida registrazione + attiva conto + emetti carta |
-| PUT | `/registrations/{userId}/reject` | Rifiuta registrazione |
-| GET | `/customers` | Lista tutti i clienti ordinata per nome |
+| POST | `/` | Upload profile picture (multipart) |
+| DELETE | `/` | Delete profile picture |
 
-### Employee — Carte — `/api/v1/employee` `[D]`
+### Customer — Notifications — `/api/v1/customer/notifications` `[C]`
 
-| Metodo | Path | Descrizione |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/cards` | Lista tutte le carte del sistema |
-| GET | `/cards/{cardId}` | Dettaglio carta |
-| GET | `/accounts/{accountNumber}/cards` | Carte associate a un conto |
+| GET | `/` | List my notifications |
+| PUT | `/{id}/read` | Mark notification as read |
 
-### Admin — `/api/cards` `[D]`
+### Customer — PIN — `/pin` `[C]`
 
-| Metodo | Path | Descrizione |
+| Method | Path | Description |
 |---|---|---|
-| PATCH | `/{cardId}/status?status=` | Aggiorna stato carta (ACTIVE/INACTIVE/BLOCKED) |
+| POST | `/setup` | Set up 6-digit PIN |
+| GET | `/status` | Check PIN status |
+| POST | `/verify` | Verify PIN |
+
+### Employee — Accounts — `/api/v1/employee/accounts` `[D]`
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/` | List all accounts (`?status=` optional) |
+| GET | `/user/{userId}` | Accounts for specific user |
+| GET | `/{accountNumber}` | Account detail |
+| PUT | `/{accountNumber}/activate` | Activate account (INACTIVE → ACTIVE) |
+| PUT | `/{accountNumber}/freeze` | Freeze account (ACTIVE → FROZEN) |
+| PUT | `/{accountNumber}/closure/validate` | Validate closure (FROZEN → CLOSED) |
+| PUT | `/{accountNumber}/closure/reject` | Reject closure (FROZEN → ACTIVE) |
+| GET | `/{accountNumber}/limits` | View account limits |
+| PUT | `/{accountNumber}/limits/{limitType}` | Set limit (e.g. DAILY_TRANSFER) |
+
+### Employee — Users — `/api/v1/employee/users` `[D]`
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/registrations/pending` | Pending registrations |
+| PUT | `/registrations/{userId}/validate` | Validate registration + activate account + issue card |
+| PUT | `/registrations/{userId}/reject` | Reject registration |
+| GET | `/customers` | List all customers sorted by name |
+
+### Employee — Cards — `/api/v1/employee` `[D]`
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/cards` | List all cards |
+| GET | `/cards/{cardId}` | Card detail |
+| GET | `/accounts/{accountNumber}/cards` | Cards linked to account |
+| PATCH | `/cards/{cardId}/status?status=` | Update card status (ACTIVE/INACTIVE/BLOCKED) |
+
+### Admin — Dashboard — `/api/v1/admin/dashboard` `[A]`
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/` | Aggregated statistics |
+
+### Admin — Employees — `/api/v1/admin/employees` `[A]`
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/` | List all employees |
+| POST | `/` | Create new employee |
+| GET | `/{id}` | Employee detail |
+| PUT | `/{id}/suspend` | Suspend employee |
+
+### Admin — Limits — `/api/v1/admin/limits` `[A]`
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/` | List all limit types |
+| PUT | `/{limitType}` | Update global limit |
+
+### Admin — Audit Logs — `/api/v1/admin/audit-logs` `[A]`
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/` | List audit logs (paginated) |
+
+### Comuni — `/api/v1/comuni`
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/` | List Italian municipalities |
+| GET | `/{nome}` | Search municipality by name |
 
 ### Export — `/api/users`
 
-| Metodo | Path | Descrizione |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/export?filePath=` | Esporta anagrafica clienti su file |
+| GET | `/export?filePath=` | Export customer data to file |
 
 ---
 
-## 9. Gestione Errori
+## 9. Error Handling
 
-Formato unico risposta errori:
+Standard error response format:
 
 ```json
 {
@@ -446,82 +593,112 @@ Formato unico risposta errori:
 }
 ```
 
-### Errori Business
+### Business Errors
 
-| Error Code | HTTP | Descrizione |
+| Error Code | HTTP | Description |
 |---|---|---|
-| `USER_NOT_FOUND` | 400 | Utente non trovato |
-| `ACCOUNT_NOT_FOUND` | 400 | Conto inesistente |
-| `ACCOUNT_INACTIVE` | 400 | Account non attivo |
-| `INVALID_ACCOUNT_STATE` | 400 | Operazione non permessa sullo stato attuale |
-| `INSUFFICIENT_FUNDS` | 400 | Saldo insufficiente |
-| `LIMIT_EXCEEDED` | 400 | Superato massimale operativo (giornaliero, mensile, singolo) |
-| `NON_ZERO_BALANCE` | 400 | Chiusura conto con saldo non zero |
-| `FORBIDDEN` | 400 | Conto non appartiene all'utente |
-| `EMAIL_ALREADY_REGISTERED` | 400 | Email già registrata |
-| `INVALID_CREDENTIALS` | 400 | Credenziali non valide |
-| `TRANSACTION_TYPE_NOT_FOUND` | 400 | Tipo transazione non configurato |
-| `TRANSACTION_STATUS_NOT_FOUND` | 400 | Stato transazione non configurato |
+| `USER_NOT_FOUND` | 400 | User not found |
+| `ACCOUNT_NOT_FOUND` | 400 | Account not found |
+| `ACCOUNT_INACTIVE` | 400 | Account not active |
+| `INVALID_ACCOUNT_STATE` | 400 | Operation not allowed on current state |
+| `INSUFFICIENT_FUNDS` | 400 | Insufficient balance |
+| `LIMIT_EXCEEDED` | 400 | Operational limit exceeded (daily, monthly, single) |
+| `NON_ZERO_BALANCE` | 400 | Account closure with non-zero balance |
+| `FORBIDDEN` | 400 | Account does not belong to user |
+| `EMAIL_ALREADY_REGISTERED` | 400 | Email already registered |
+| `INVALID_CREDENTIALS` | 400 | Invalid credentials |
+| `TRANSACTION_TYPE_NOT_FOUND` | 400 | Transaction type not configured |
+| `TRANSACTION_STATUS_NOT_FOUND` | 400 | Transaction status not configured |
 
-### Errori Validazione
+### Validation Errors
 
-| Error Code | HTTP | Descrizione |
+| Error Code | HTTP | Description |
 |---|---|---|
-| `VALIDATION_ERROR` | 400 | Violazione vincoli `jakarta.validation` sui campi DTO |
+| `VALIDATION_ERROR` | 400 | `jakarta.validation` constraint violation on DTO fields |
 
-### Errori Tecnici
+### Technical Errors
 
-| Error Code | HTTP | Descrizione |
+| Error Code | HTTP | Description |
 |---|---|---|
-| `INTERNAL_ERROR` | 500 | Errore imprevisto (nessun dettaglio esposto al client) |
+| `INTERNAL_ERROR` | 500 | Unexpected error (no details exposed to client) |
 
 ---
 
 ## 10. Feature Overview
 
-### 10.1. Registrazione e Onboarding
+### 10.1. Registration & Onboarding
 
-1. Customer si registra → stato `PENDING`, conto `INACTIVE`, carta non emessa
-2. Employee valida registrazione → stato `ACTIVE`, conto `ACTIVE`, carta DEBIT `ACTIVE` emessa automaticamente
-3. Employee può rifiutare o annullare la registrazione
+1. Customer registers → status `PENDING`, account `INACTIVE`, no card issued
+2. Employee validates → status `ACTIVE`, account `ACTIVE`, DEBIT card `ACTIVE` issued automatically
+3. Employee can reject or cancel registration
 
-### 10.2. Conti Correnti
+### 10.2. Bank Accounts
 
-- Conto iniziale creato automaticamente alla registrazione
-- Apertura conti aggiuntivi (bonifico da conto esistente)
-- Richiesta chiusura → conto congelato → employee valida (saldo deve essere 0) o rifiuta
-- Employee può congelare/attivare conti
+- Initial account created automatically on registration
+- Open additional accounts (transfer from existing account)
+- Request closure → account frozen → employee validates (balance must be 0) or rejects
+- Employee can freeze/activate accounts
+- Holder info and monthly summary endpoints for dashboard
 
-### 10.3. Transazioni
+### 10.3. Transactions
 
-- Deposito e prelievo con ownership check
-- Validazione stato conto (solo `ACTIVE`)
-- Validazione saldo (prelievo non può superare saldo)
-- Storico paginato con filtri data (max 30 giorni)
-- Ultime 10 transazioni per conto
-- Type e status risolti per nome dal DB (no hardcoded ID)
+- Deposit and withdrawal with ownership check
+- Account status validation (only `ACTIVE`)
+- Balance validation (withdrawal cannot exceed balance)
+- Paginated history with date filters (max 30 days)
+- Last 10 transactions per account
+- Type and status resolved by name from DB (no hardcoded IDs)
 
-### 10.4. Carte
+### 10.4. Cards
 
-- Carta DEBIT emessa automaticamente alla validazione registrazione
-- Stati: `INACTIVE` → `ACTIVE` → `BLOCKED` (irreversibile)
-- Numero carta unico generato, CVV random, scadenza 5 anni
-- Customer: lista e dettaglio proprie carte
-- Employee: lista tutte le carte, dettaglio, carte per conto, aggiorna stato
+- DEBIT card issued automatically on registration validation
+- States: `INACTIVE` → `ACTIVE` → `BLOCKED` (irreversible)
+- Unique card number generated, random CVV, 5-year expiry
+- Customer: list and detail of own cards
+- Employee: list all cards, detail, cards per account, update status
 
-### 10.5. Gestione Dipendenti
+### 10.5. Employee Management
 
-- Lista registrazioni pendenti
-- Validazione/rifiuto registrazione
-- Lista clienti ordinata
-- Gestione conti (attiva, congela, chiudi)
-- Gestione carte (stato)
+- Pending registration list
+- Registration validation/rejection
+- Customer list sorted by name
+- Account management (activate, freeze, close)
+- Card management (status)
+
+### 10.6. Admin Dashboard
+
+- Aggregated statistics
+- Employee CRUD management
+- Global limit configuration
+- Audit log viewer
+
+### 10.7. Saved Beneficiaries
+
+- Save frequently used beneficiaries for quick transfers
+- Customer can add, list, and remove saved beneficiaries
+- Endpoint: `/api/v1/customer/saved-beneficiaries`
+
+### 10.8. Profile Picture
+
+- Upload and delete profile pictures
+- Supported formats: JPG, PNG, GIF, WebP (max 5 MB)
+- Stored locally in `uploads/profile-pictures/`
+
+### 10.9. Password Management
+
+- Password change with automatic token invalidation via `JwtPasswordChangeFilter`
+- Old tokens rejected after password change
+
+### 10.10. Notifications
+
+- Customer notifications for account events
+- Mark as read functionality
 
 ---
 
-## 11. Esempi Test
+## 11. Test Examples
 
-### Login e ottenimento token
+### Login and token retrieval
 
 ```bash
 # Login customer
@@ -535,21 +712,21 @@ curl -X POST http://localhost:8081/api/v1/auth/keycloak-login \
   -d '{"username": "admin", "password": "admin"}'
 ```
 
-### Lista conti (customer)
+### List accounts (customer)
 
 ```bash
 curl -X GET http://localhost:8081/api/v1/customer/accounts \
   -H "Authorization: Bearer <customer-token>"
 ```
 
-### Dettaglio conto
+### Account detail
 
 ```bash
 curl -X GET http://localhost:8081/api/v1/customer/accounts/IT... \
   -H "Authorization: Bearer <customer-token>"
 ```
 
-### Deposito
+### Deposit
 
 ```bash
 curl -X POST http://localhost:8081/api/v1/customer/transactions/deposit \
@@ -558,69 +735,94 @@ curl -X POST http://localhost:8081/api/v1/customer/transactions/deposit \
   -d '{"accountNumber": "IT...", "amount": 500}'
 ```
 
-### Bonifico
+### Transfer
 
 ```bash
 curl -X POST http://localhost:8081/api/v1/customer/transactions/transfer \
   -H "Authorization: Bearer <customer-token>" \
   -H "Content-Type: application/json" \
-  -d '{"sourceAccountNumber": "IT...", "destinationAccountNumber": "IT...", "amount": 250, "description": "Bonifico"}
+  -d '{"sourceAccountNumber": "IT...", "destinationAccountNumber": "IT...", "amount": 250, "description": "Transfer"}'
 
-# Usando beneficiario salvato
+# Using saved beneficiary
 curl -X POST http://localhost:8081/api/v1/customer/transactions/transfer \
   -H "Authorization: Bearer <customer-token>" \
   -H "Content-Type: application/json" \
   -d '{"sourceAccountNumber": "IT...", "beneficiaryId": 1, "amount": 250}'
 ```
 
-### Gestione beneficiari
+### Beneficiary management
 
 ```bash
-# Salva beneficiario
+# Save beneficiary
 curl -X POST http://localhost:8081/api/v1/customer/beneficiaries \
   -H "Authorization: Bearer <customer-token>" \
   -H "Content-Type: application/json" \
-  -d '{"nickname": "Mamma", "destinationAccountNumber": "IT..."}'
+  -d '{"nickname": "Mom", "destinationAccountNumber": "IT..."}'
 
-# Lista beneficiari
+# List beneficiaries
 curl -X GET http://localhost:8081/api/v1/customer/beneficiaries \
   -H "Authorization: Bearer <customer-token>"
 
-# Rimuovi beneficiario
+# Remove beneficiary
 curl -X DELETE http://localhost:8081/api/v1/customer/beneficiaries/1 \
   -H "Authorization: Bearer <customer-token>"
 ```
 
-### Storico transazioni
+### Saved beneficiaries
+
+```bash
+# Save
+curl -X POST http://localhost:8081/api/v1/customer/saved-beneficiaries \
+  -H "Authorization: Bearer <customer-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"nickname": "Dad", "iban": "IT..."}'
+
+# List
+curl -X GET http://localhost:8081/api/v1/customer/saved-beneficiaries \
+  -H "Authorization: Bearer <customer-token>"
+
+# Delete
+curl -X DELETE http://localhost:8081/api/v1/customer/saved-beneficiaries/1 \
+  -H "Authorization: Bearer <customer-token>"
+```
+
+### Transaction history
 
 ```bash
 curl -X GET "http://localhost:8081/api/v1/customer/transactions/all?start=2026-01-01T00:00:00&end=2026-12-31T23:59:59&page=0&size=20" \
   -H "Authorization: Bearer <customer-token>"
 ```
 
-### Validazione registrazione (employee)
+### Registration validation (employee)
 
 ```bash
-# Lista pendenti
+# List pending
 curl -X GET http://localhost:8081/api/v1/employee/users/registrations/pending \
   -H "Authorization: Bearer <admin-token>"
 
-# Valida
+# Validate
 curl -X PUT http://localhost:8081/api/v1/employee/users/registrations/{userId}/validate \
   -H "Authorization: Bearer <admin-token>"
 ```
 
-### Lista conti per utente (employee)
+### Account list per user (employee)
 
 ```bash
 curl -X GET http://localhost:8081/api/v1/employee/accounts/user/{userId} \
   -H "Authorization: Bearer <admin-token>"
 ```
 
-### Freeze conto (employee)
+### Freeze account (employee)
 
 ```bash
 curl -X PUT http://localhost:8081/api/v1/employee/accounts/{accountNumber}/freeze \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+### Admin dashboard
+
+```bash
+curl -X GET http://localhost:8081/api/v1/admin/dashboard \
   -H "Authorization: Bearer <admin-token>"
 ```
 
@@ -631,4 +833,4 @@ curl -X PUT http://localhost:8081/api/v1/employee/accounts/{accountNumber}/freez
 - **UI**: `http://localhost:8081/swagger-ui.html`
 - **JSON**: `http://localhost:8081/v3/api-docs`
 
-Endpoint pubblici: Swagger UI, `/api/v1/auth/register`, `/api/v1/auth/keycloak-login`. Tutti gli altri richiedono Bearer token.
+Public endpoints: Swagger UI, `/api/v1/auth/register`, `/api/v1/auth/keycloak-login`. All others require Bearer token.
