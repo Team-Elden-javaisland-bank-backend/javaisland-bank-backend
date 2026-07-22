@@ -6,7 +6,7 @@ spring:
     name: bank-backend
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/javaisland_backend
+    url: jdbc:postgresql://localhost:5432/javaisland_backend
     username: ${DB_USERNAME:bank_admin}
     password: ${DB_PASSWORD:bank_password}
     driver-class-name: org.postgresql.Driver

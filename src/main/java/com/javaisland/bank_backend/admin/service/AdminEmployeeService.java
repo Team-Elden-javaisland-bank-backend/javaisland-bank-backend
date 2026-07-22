@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -97,6 +98,14 @@ public class AdminEmployeeService {
         user.setKeycloakId(keycloakId);
         user.setRoleType(employeeRole);
         user.setStatus(activeStatus);
+        user.setBirthDate(LocalDate.of(1990, 1, 1));
+        user.setGender("X");
+        user.setProfession("Employee");
+        user.setPhone("N/A");
+        user.setResidence("N/A");
+        user.setBirthPlace("N/A");
+        user.setBirthProvince("NA");
+        user.setFiscalCode("N/AEMPLOYEE00000");
         user = userRepository.save(user);
 
         log.info("Admin created employee: id={}, email={}", user.getId(), request.getEmail());

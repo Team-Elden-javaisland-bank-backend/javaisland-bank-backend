@@ -29,6 +29,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -399,11 +400,52 @@ public class AccountService {
 
     @Transactional(readOnly = true)
     public EmployeeUserDetailDto getEmployeeUserDetailByUserId(Long userId) {
-        userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiBankException("Utente non trovato con id: " + userId));
-        Account account = accountRepository.findByUserId(userId).stream().findFirst()
-                .orElseThrow(() -> new ApiBankException("Nessun conto trovato per l'utente id: " + userId));
-        return getEmployeeUserDetail(account.getAccountNumber());
+
+        Optional<Account> accountOpt = accountRepository.findByUserId(userId).stream().findFirst();
+
+        EmployeeUserDetailDto.EmployeeUserDetailDtoBuilder builder = EmployeeUserDetailDto.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .email(user.getEmail())
+                .birthDate(user.getBirthDate())
+                .profession(user.getProfession())
+                .gender(user.getGender())
+                .fiscalCode(user.getFiscalCode())
+                .phone(user.getPhone())
+                .residence(user.getResidence())
+                .birthPlace(user.getBirthPlace())
+                .birthProvince(user.getBirthProvince())
+                .userStatus(user.getStatus().getUserStatus())
+                .userCreatedAt(user.getCreatedAt());
+
+        if (accountOpt.isPresent()) {
+            Account account = accountOpt.get();
+            var cards = cardRepository.findByAccountId(account.getId()).stream()
+                    .map(card -> EmployeeUserDetailDto.CardSummaryDto.builder()
+                            .id(card.getId())
+                            .maskedCardNumber("****" + card.getCardNumber().substring(12))
+                            .fullCardNumber(card.getCardNumber())
+                            .cvv(card.getCvv())
+                            .holderName(card.getHolderName())
+                            .expirationDate(card.getExpirationDate())
+                            .cardType(card.getCardType().getTypeName())
+                            .cardStatus(card.getStatus().getStatusName())
+                            .build())
+                    .toList();
+
+            builder.accountNumber(account.getAccountNumber())
+                    .balance(account.getBalance())
+                    .accountStatus(getStatusName(account.getStatusId()))
+                    .accountCreatedAt(account.getCreatedAt())
+                    .closedAt(account.getClosedAt())
+                    .cards(cards);
+        }
+
+        return builder.build();
     }
 
     private String getStatusName(Integer statusId) {

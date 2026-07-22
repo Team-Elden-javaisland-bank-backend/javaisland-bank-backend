@@ -1,7 +1,9 @@
 package com.javaisland.bank_backend.user.controller;
 
 import com.javaisland.bank_backend.account.model.Account;
+import com.javaisland.bank_backend.account.model.LimitChangeRequest;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
+import com.javaisland.bank_backend.account.repository.LimitChangeRequestRepository;
 import com.javaisland.bank_backend.card.model.Card;
 import com.javaisland.bank_backend.card.repository.CardRepository;
 import com.javaisland.bank_backend.user.dto.CustomerRequestDto;
@@ -29,6 +31,7 @@ import java.util.List;
 public class CustomerRequestController {
 
     private final PasswordChangeRequestRepository passwordChangeRequestRepository;
+    private final LimitChangeRequestRepository limitChangeRequestRepository;
     private final AccountRepository accountRepository;
     private final CardRepository cardRepository;
     private final UserRepository userRepository;
@@ -46,6 +49,16 @@ public class CustomerRequestController {
                         .type("PASSWORD_CHANGE")
                         .status(req.getStatus())
                         .description("Cambio password richiesto")
+                        .createdAt(req.getCreatedAt())
+                        .processedAt(req.getProcessedAt())
+                        .build()));
+
+        limitChangeRequestRepository.findByUserIdOrderByCreatedAtDesc(userId)
+                .forEach(req -> all.add(CustomerRequestDto.builder()
+                        .id(req.getId())
+                        .type("LIMIT_CHANGE")
+                        .status(req.getStatus())
+                        .description("Modifica limite " + req.getLimitTypeName() + " — richiesto: €" + req.getRequestedAmount())
                         .createdAt(req.getCreatedAt())
                         .processedAt(req.getProcessedAt())
                         .build()));

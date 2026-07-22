@@ -2,8 +2,11 @@ package com.javaisland.bank_backend.employee.controller;
 
 import com.javaisland.bank_backend.account.dto.EmployeeUserDetailDto;
 import com.javaisland.bank_backend.account.model.Account;
+import com.javaisland.bank_backend.account.model.LimitChangeRequest;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
+import com.javaisland.bank_backend.account.repository.LimitChangeRequestRepository;
 import com.javaisland.bank_backend.account.service.AccountService;
+import com.javaisland.bank_backend.account.service.LimitChangeService;
 import com.javaisland.bank_backend.employee.dto.EmployeeRequestDto;
 import com.javaisland.bank_backend.user.dto.CustomerListItemDto;
 import com.javaisland.bank_backend.user.dto.PasswordChangeRequestDto;
@@ -31,8 +34,10 @@ public class EmployeeUserController {
 
     private final UserService userService;
     private final PasswordChangeService passwordChangeService;
+    private final LimitChangeService limitChangeService;
     private final AccountService accountService;
     private final PasswordChangeRequestRepository passwordChangeRequestRepository;
+    private final LimitChangeRequestRepository limitChangeRequestRepository;
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
 
@@ -80,6 +85,23 @@ public class EmployeeUserController {
         return ResponseEntity.ok("Richiesta di cambio password rifiutata.");
     }
 
+    @GetMapping("/limit-requests/pending")
+    public ResponseEntity<List<LimitChangeRequest>> getPendingLimitRequests() {
+        return ResponseEntity.ok(limitChangeService.getPendingRequests());
+    }
+
+    @PutMapping("/limit-requests/{requestId}/approve")
+    public ResponseEntity<String> approveLimitRequest(@PathVariable Long requestId) {
+        limitChangeService.approveRequest(requestId);
+        return ResponseEntity.ok("Richiesta di modifica limite approvata.");
+    }
+
+    @PutMapping("/limit-requests/{requestId}/reject")
+    public ResponseEntity<String> rejectLimitRequest(@PathVariable Long requestId) {
+        limitChangeService.rejectRequest(requestId);
+        return ResponseEntity.ok("Richiesta di modifica limite rifiutata.");
+    }
+
     @GetMapping("/all-requests")
     public ResponseEntity<List<EmployeeRequestDto>> getAllRequests() {
         List<EmployeeRequestDto> all = new ArrayList<>();
@@ -95,6 +117,25 @@ public class EmployeeUserController {
                     .userFirstName(user != null ? user.getFirstName() : null)
                     .userLastName(user != null ? user.getLastName() : null)
                     .userEmail(user != null ? user.getEmail() : null)
+                    .createdAt(req.getCreatedAt())
+                    .processedAt(req.getProcessedAt())
+                    .build());
+        });
+
+        limitChangeRequestRepository.findAll().forEach(req -> {
+            User user = userRepository.findById(req.getUserId()).orElse(null);
+            all.add(EmployeeRequestDto.builder()
+                    .id(req.getId())
+                    .type("LIMIT_CHANGE")
+                    .status(req.getStatus())
+                    .description(req.getLimitTypeName() + " — €" + req.getRequestedAmount())
+                    .userId(req.getUserId())
+                    .userFirstName(user != null ? user.getFirstName() : null)
+                    .userLastName(user != null ? user.getLastName() : null)
+                    .userEmail(user != null ? user.getEmail() : null)
+                    .accountNumber(req.getAccountNumber())
+                    .limitTypeName(req.getLimitTypeName())
+                    .requestedAmount(req.getRequestedAmount())
                     .createdAt(req.getCreatedAt())
                     .processedAt(req.getProcessedAt())
                     .build());
