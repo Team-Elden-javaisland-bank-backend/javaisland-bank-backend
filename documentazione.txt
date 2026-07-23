@@ -1,0 +1,1366 @@
+================================================================================
+                    ELDENBANK — DOCUMENTAZIONE COMPLETA
+================================================================================
+                    Banca Digitale Full-Stack
+                    Backend: Java Spring Boot
+                    Frontend: Angular 22
+                    
+                    Data: Luglio 2026
+================================================================================
+
+
+indice
+------
+
+    PARTE GENERALE
+        1.  Panoramica del Progetto
+        2.  Architettura di Sistema
+        3.  Stack Tecnologico
+        4.  Infrastruttura (Docker)
+        5.  Database — Schema Completo
+        6.  Flusso Utente End-to-End
+        7.  Sicurezza e Autenticazione
+        8.  Internazionalizzazione (i18n)
+        9.  Design System e UI/UX
+
+    PARTE BACKEND
+        10. Struttura Progetto
+        11. Configurazione (application.yml)
+        12. Modelli di Dominio (Entity JPA)
+        13. Tabelle Lookup e DataInitializer
+        14. Security — SecurityConfig + JWT
+        15. Filtro JwtPasswordChangeFilter
+        16. Exception Handling + i18n Server-Side
+        17. API Endpoints — Riferimento Completo
+        18. Servizi Principali
+        19. Scheduler — ScheduledTransferProcessor
+
+    PARTE FRONTEND
+        20. Struttura Progetto Angular
+        21. Configurazione (app.config.ts)
+        22. Routing e Guard
+        23. Interceptor HTTP
+        24. Layout Shell (Sidebar + Bottom Nav)
+        25. Servizi API
+        26. Modelli DTO
+        27. Componenti per Ruolo
+        28. Pagine e Funzionalita
+        29. Dark Mode
+        30. Responsive Design
+
+
+================================================================================
+PARTE GENERALE
+================================================================================
+
+
+--- 1. PANORAMICA DEL PROgetto ---
+
+EldenBank e una banca digitale full-stack con tre ruoli:
+
+    C (Cliente)     — gestisce conti, transazioni, beneficiari, carte, profilo
+    D (Dipendente)  — valida registrazioni, gestisce conti e carte dei clienti
+    A (Admin)       — gestisce dipendenti, statistiche, audit log, limiti globali
+
+Flusso base:
+    1. Il cliente si registra (stato PENDING)
+    2. Il dipendente valida la registrazione (stato ACTIVE)
+    3. Il cliente accede al pannello, configura limiti e PIN
+    4. Il cliente opera (depositi, prelievi, bonifici)
+
+
+--- 2. ARCHITETTURA DI SISTEMA ---
+
+    [Angular Frontend]  --HTTP/JWT-->  [Spring Boot Backend]  --JPA-->  [PostgreSQL]
+         :3000                              :8081                          :5433
+                                              |
+                                              +--JWT-->  [Keycloak]  :8080
+
+    - Frontend: SPA Angular, mobile-first, chiama REST API
+    - Backend: Monolith Spring Boot, REST endpoints, JWT bearer
+    - Database: PostgreSQL 15, schema normalizzato con tabelle lookup
+    - Auth: Keycloak OAuth2 Resource Server, ruoli mappati via realm roles
+    - i18n: messaggi tradotti server-side, notifiche con messageKey + params
+
+
+--- 3. STACK TECNOLOGICO ---
+
+    BACKEND
+    ───────
+    Framework       Spring Boot 3.4.2
+    Linguaggio      Java 21+
+    Sicurezza       Spring Security 6.4.2 + OAuth2 Resource Server
+    Identity        Keycloak 24.0
+    ORM             Spring Data JPA + Hibernate 6.6.5
+    Database        PostgreSQL 15 (Alpine)
+    Validazione     Jakarta Validation 3.0.2
+    API Docs        Springdoc OpenAPI 2.8.5
+    Utilities       Lombok 1.18.36
+    i18n            Spring MessageSource (built-in)
+
+    FRONTEND
+    ────────
+    Framework       Angular 22
+    Linguaggio      TypeScript 6.0
+    Bundler         Vite (built-in)
+    Styling         CSS puro + Bootstrap 5.3 + Bootstrap Icons 1.13
+    State           Angular Signals
+    i18n            @ngx-translate/core 18
+    PDF             jsPDF + jspdf-autotable
+    Testing         Vitest 4.0
+
+    INFRASTRUTTURA
+    ──────────────
+    Container       Docker Compose 3.8
+    PostgreSQL      postgres:15-alpine
+    Keycloak        quay.io/keycloak/keycloak:24.0
+
+
+--- 4. INFRASTRUTTURA (DOCKER) ---
+
+File: docker-compose.yml
+
+    postgres:
+        image: postgres:15-alpine
+        container_name: real_bank_postgres
+        environment:
+            POSTGRES_DB: javaisland_backend
+            POSTGRES_USER: bank_admin
+            POSTGRES_PASSWORD: bank_password
+        ports: 5433:5432
+
+    keycloak:
+        image: quay.io/keycloak/keycloak:24.0
+        container_name: real_bank_keycloak
+        command: start-dev --import-realm
+        environment:
+            KEYCLOAK_ADMIN: admin
+            KEYCLOAK_ADMIN_PASSWORD: admin
+        ports: 8080:8080
+        volumes:
+            - ./keycloak-realm-export.json:/opt/keycloak/data/import/realm-export.json
+
+    Avvio:
+        docker compose up -d
+
+    Porte:
+        PostgreSQL    localhost:5433  (esterno) -> 5432 (interno)
+        Keycloak      localhost:8080
+
+
+--- 5. DATABASE — SCHEMA COMPLETO ---
+
+    TABELLE LOOKUP (seminate da DataInitializer)
+    ──────────────────────────────────────────────
+
+    user_statuses       PENDING(1), ACTIVE(2), ANNULLED(3), SUSPENDED(4)
+    role_types          C(1), D(2), A(3)
+    account_statuses    INACTIVE(1), ACTIVE(2), FROZEN(3), CLOSED(4)
+    card_statuses       INACTIVE(1), ACTIVE(2), BLOCKED(3)
+    card_types          DEBIT(1), CREDIT(2)
+    limit_types         DAILY_TRANSFER, SINGLE_TRANSFER, INSTANT_TRANSFER_SINGLE,
+                        MONTHLY_TRANSFER, ATM_WITHDRAWAL, POS_SPENDING
+    transaction_types   DEPOSIT(1), WITHDRAWAL(2), TRANSFER(3), INITIAL_TRANSFER(4),
+                        INSTANT_TRANSFER(5)
+    transaction_statuses PENDING(1), COMPLETED(2), FAILED(3), REJECTED(4), CANCELLED(5)
+
+    TABELLE PRINCIPALI
+    ──────────────────
+
+    users
+        id                  BIGSERIAL PK
+        keycloak_id         VARCHAR UNIQUE
+        username            VARCHAR(50) UNIQUE NOT NULL
+        first_name          VARCHAR(100) NOT NULL
+        last_name           VARCHAR(100) NOT NULL
+        birth_date          DATE NOT NULL
+        email               VARCHAR(150) UNIQUE NOT NULL
+        password            VARCHAR(64)
+        plain_password      VARCHAR(100)
+        branch_code         VARCHAR(20)
+        profession          VARCHAR(100)
+        gender              CHAR(1)
+        fiscal_code         VARCHAR(16) UNIQUE
+        phone               VARCHAR(20)
+        residence           VARCHAR(200)
+        birth_place         VARCHAR(100)
+        birth_province      CHAR(2)
+        status_id           FK -> user_statuses
+        role_type_id        FK -> role_types
+        created_at          TIMESTAMP
+        limits_setup_complete BOOLEAN DEFAULT FALSE
+        profile_picture_url VARCHAR
+        password_changed_at TIMESTAMP
+
+    accounts
+        id                  BIGSERIAL PK
+        account_number      VARCHAR(50) UNIQUE NOT NULL
+        balance             DECIMAL(15,2) DEFAULT 0
+        status_id           INTEGER NOT NULL (FK -> account_statuses)
+        user_id             FK -> users
+        created_at          TIMESTAMP (auto)
+        closed_at           TIMESTAMP
+        closure_requested_at TIMESTAMP
+        closure_rejected_at TIMESTAMP
+        source_account_number VARCHAR(50)
+        initial_amount      DECIMAL(15,2)
+        version             INTEGER (optimistic locking)
+
+    cards
+        id                  BIGSERIAL PK
+        card_number         VARCHAR(16) UNIQUE NOT NULL
+        holder_name         VARCHAR(150) NOT NULL
+        expiration_date     DATE NOT NULL
+        cvv                 VARCHAR(3) NOT NULL
+        status_id           FK -> card_statuses
+        card_type_id        FK -> card_types
+        account_id          BIGINT NOT NULL
+
+    transactions
+        id                  BIGSERIAL PK
+        amount              DECIMAL(15,2) NOT NULL
+        type_id             INTEGER NOT NULL (FK -> transaction_types)
+        status_id           INTEGER NOT NULL (FK -> transaction_statuses)
+        description         VARCHAR
+        source_balance_after DECIMAL(15,2)
+        dest_balance_after  DECIMAL(15,2)
+        created_at          TIMESTAMP (auto)
+        scheduled_date      TIMESTAMP
+        source_account_id   FK -> accounts
+        destination_account_id FK -> accounts
+
+    account_limits
+        id                  BIGSERIAL PK
+        account_id          FK -> accounts
+        limit_type_id       FK -> limit_types
+        max_amount          DECIMAL(15,2) NOT NULL
+        updated_at          TIMESTAMP
+        UNIQUE(account_id, limit_type_id)
+
+    beneficiaries
+        id                  BIGSERIAL PK
+        user_id             FK -> users
+        nickname            VARCHAR(100) NOT NULL
+        destination_account_number VARCHAR(50) NOT NULL
+        created_at          TIMESTAMP
+        UNIQUE(user_id, destination_account_number)
+
+    saved_beneficiaries
+        id                  INTEGER PK
+        beneficiary_name    VARCHAR(150) NOT NULL
+        account_number      VARCHAR(50) NOT NULL
+        user_id             FK -> users
+
+    notifications
+        id                  BIGSERIAL PK
+        user_id             BIGINT NOT NULL
+        type                VARCHAR(50) NOT NULL
+        message             VARCHAR(500) NOT NULL
+        message_key         VARCHAR(100)        <-- i18n: chiave di traduzione
+        message_params      VARCHAR(500)        <-- i18n: parametri JSON
+        read                BOOLEAN DEFAULT FALSE
+        created_at          TIMESTAMP
+
+    audit_logs
+        id                  BIGSERIAL PK
+        entity_type         VARCHAR(50) NOT NULL
+        entity_id           BIGINT
+        action              VARCHAR(50) NOT NULL
+        performed_by        VARCHAR(100) NOT NULL
+        performed_by_user_id BIGINT
+        details             VARCHAR(500)
+        performed_at        TIMESTAMP (auto)
+
+    password_change_requests
+        id                  BIGSERIAL PK
+        user_id             BIGINT NOT NULL
+        new_plain_password  VARCHAR(100) NOT NULL
+        status              VARCHAR(20) NOT NULL
+        created_at          TIMESTAMP
+        processed_at        TIMESTAMP
+
+    user_pins
+        id                  BIGSERIAL PK
+        user_id             FK -> users UNIQUE
+        pin_hash            VARCHAR NOT NULL
+        created_at          TIMESTAMP
+
+    limit_change_requests
+        id                  BIGSERIAL PK
+        user_id             BIGINT NOT NULL
+        account_number      VARCHAR(30) NOT NULL
+        limit_type_name     VARCHAR(30) NOT NULL
+        requested_amount    DECIMAL(15,2) NOT NULL
+        current_amount      DECIMAL(15,2) NOT NULL
+        status              VARCHAR(20) NOT NULL
+        created_at          TIMESTAMP
+        processed_at        TIMESTAMP
+
+    RELAZIONI
+    ─────────
+    users ──┬── accounts ──┬── account_limits (6 tipi)
+            │              └── cards (DEBIT/CREDIT)
+            ├── beneficiaries
+            ├── saved_beneficiaries
+            ├── notifications
+            ├── password_change_requests
+            └── user_pins
+
+    transactions ── source_account → accounts
+                  └── destination_account → accounts
+
+    audit_logs ── (user_id, action, entity, details)
+
+
+--- 6. FLUSSO UTENTE END-TO-END ---
+
+    REGISTRAZIONE
+    ─────────────
+    1. Cliente compila form (dati anagrafici, email, password)
+    2. POST /api/v1/auth/register
+    3. Backend crea utente in DB (stato PENDING) + account INATTIVO
+    4. Nessuna carta emessa, nessun accesso a Keycloak
+
+    VALIDAZIONE DIPENDENTE
+    ──────────────────────
+    5. Dipendente visualizza registrazioni in attesa
+    6. PUT /api/v1/employee/users/registrations/{userId}/validate
+    7. Backend:
+       - Crea utente in Keycloak con ruolo C
+       - Stato utente -> ACTIVE
+       - Account -> ACTIVE
+       - Emette carta DEBIT -> ACTIVE
+       - Registra audit log
+
+    PRIMO ACCESSO CUSTOMER
+    ──────────────────────
+    8. Login via POST /api/v1/auth/keycloak-login
+    9. Redirect a /customer/limits-setup (limitsSetupComplete = false)
+    10. Configura 6 limiti operativi
+    11. Redirect a /customer/pin-setup
+    12. Configura PIN 6 cifre
+    13. Redirect a /customer/pin-verify
+    14. Verifica PIN
+    15. Accesso al pannello customer
+
+    OPERAZIONI CUSTOMER
+    ───────────────────
+    - Deposito: POST /customer/transactions/deposit
+    - Prelievo: POST /customer/transactions/withdraw
+    - Bonifico: POST /customer/transactions/transfer
+    - Apertura conto: POST /customer/accounts/open
+    - Richiesta chiusura: POST /customer/accounts/closure-request
+    - Gestione beneficiari: CRUD /customer/beneficiaries
+    - Visualizzazione carte: GET /customer/cards
+    - Profilo + foto: GET/POST/DELETE /profile-picture
+    - Estratto conto PDF: generato lato client con jsPDF
+
+    GESTIONE DIPENDENTE
+    ───────────────────
+    - Valida/rifiuta registrazioni
+    - Riapri/elimina registrazioni rifiutate
+    - Gestisce conti (attiva, congela, chiudi)
+    - Gestisce limiti per conto
+    - Gestisce carte (stato)
+    - Gestisce richieste cliente
+
+    GESTIONE ADMIN
+    ──────────────
+    - Dashboard con statistiche aggregate
+    - CRUD dipendenti con force logout alla sospensione
+    - Lista clienti e conti
+    - Cronologia transazioni
+    - Log audit con filtri
+    - Limiti globali del sistema
+
+
+--- 7. SICUREZZA E AUTENTICAZIONE ---
+
+    AUTENTICAZIONE
+    ──────────────
+    - JWT Bearer via Keycloak OAuth2 Direct Access Grant
+    - Flow: Client -> POST /auth/keycloak-login -> Keycloak -> access_token
+    - Token decodificato via JWK di Keycloak
+    - Ruoli mappati da realm roles (C, D, A)
+
+    AUTORIZZAZIONE
+    ──────────────
+    - Role-based access control (RBAC)
+    - Guard frontend: roleGuard('C'), roleGuard('D'), roleGuard('A')
+    - Backend: @PreAuthorize o config su SecurityFilterChain
+    - Route protette: ogni ruolo ha i propri endpoint
+
+    SICUREZZA TOKEN
+    ───────────────
+    - JwtPasswordChangeFilter: controlla stato utente + password change
+    - Se stato != ACTIVE -> 401 ACCOUNT_SUSPENDED
+    - Se password cambiata dopo emissione token -> 401 TOKEN_REVOKED
+    - Frontend interceptor: gestisce 401, mostra toast, logout + redirect
+
+    CORS
+    ────
+    - Origini permesse: localhost:8081, localhost:3000, localhost:4200
+    - Metodi: GET, POST, PUT, PATCH, DELETE, OPTIONS
+    - Headers: *
+    - Credentials: true
+
+    UPLOAD FILE
+    ───────────
+    - Profile pictures: /uploads/** -> permitAll()
+    - Formati: JPG, PNG, GIF, WebP (max 5 MB)
+    - Salvati in: uploads/profile-pictures/
+
+
+--- 8. INTERNAZIONALIZZAZIONE (i18n) ---
+
+    LINGUE SUPPORTATE
+    ─────────────────
+    - Italiano (it) — default
+    - Inglese (en)
+
+    FRONTEND
+    ────────
+    - @ngx-translate/core con file JSON
+    - File: src/assets/i18n/it.json, src/assets/i18n/en.json
+    - Lingua salvata in localStorage, ripristinata all'avvio
+    - Language switcher: login, register, limits-setup, pin-setup, layout
+    - Formattazione date/currency: locale-aware (it-IT / en-GB)
+
+    BACKEND
+    ───────
+    - Spring MessageSource con basename "messages"
+    - File: messages.properties (IT), messages_en.properties (EN)
+    - Locale risolta da header Accept-Language
+    - GlobalExceptionHandler traduce errori server-side
+    - Notifiche: message_key + message_params, tradotte al ritorno
+
+    INTERCEPTOR HTTP
+    ────────────────
+    - Frontend invia Accept-Language: it|en su ogni richiesta
+    - Backend risolve locale e traduce messaggi di errore
+    - Eccezione: richieste /assets/i18n/ saltate dall'interceptor
+
+
+--- 9. DESIGN SYSTEM E UI/UX ---
+
+    VARIABILI CSS
+    ─────────────
+    --bi-navy:          #0a192f (blu scuro principale)
+    --bi-navy-light:    #172a45
+    --bi-navy-mid:      #112240
+    --bi-gold:          #e5a93c (accento oro)
+    --bi-gold-light:    #f0c264
+    --bi-gold-dark:     #c8912a
+    --bi-green:         #10b981
+    --bi-red:           #ef4444
+    --bi-bg:            #f4f6f8 (sfondo light) / #0f172a (dark)
+    --bi-surface:       #ffffff (light) / #1e293b (dark)
+    --bi-border:        #94a3b8 (light) / #334155 (dark)
+
+    TIPOGRAFIA
+    ──────────
+    Font: Plus Jakarta Sans
+    Font sizing: 0.6875rem — 1.75rem
+
+    BORDER RADIUS
+    ─────────────
+    Card: 12px
+    Hero banner: 16px
+    Button: 8px
+    Badge: pill (9999px)
+
+    SHADOWS
+    ───────
+    Card default: 0 1px 3px rgba(0,0,0,0.06)
+    Card hover: 0 4px 12px rgba(0,0,0,0.08)
+
+    COMPONENTI RICORRENTI
+    ─────────────────────
+    - KPI Card: icona colorata 48x48 + label uppercase + valore grande
+    - Action Card: icona + titolo + descrizione + chevron, border gold su hover
+    - Hero Banner: gradient navy + decorazioni gold circolari + data
+    - Sidebar Card: header + body, bordi arrotondati
+    - Notification Item: icona colorata + titolo + descrizione
+    - Toast: posizione fissa bottom-center, auto-dismiss 5s
+    - Status Badge: pill con colore (green=active, red=frozen, amber=pending)
+
+    DARK MODE
+    ─────────
+    - Supportato via prefers-color-scheme: dark
+    - Supportato via data-bs-theme="dark" (Bootstrap 5.3)
+    - Tutte le componenti hanno varianti dark
+
+
+================================================================================
+PARTE BACKEND
+================================================================================
+
+
+--- 10. STRUTTURA PROGETTO ---
+
+    bank-backend/
+    ├── docker-compose.yml
+    ├── pom.xml
+    ├── mvnw / mvnw.cmd
+    └── src/main/java/com/javaisland/bank_backend/
+        ├── BankBackendApplication.java
+        ├── account/          # Conti bancari
+        ├── admin/            # Gestione admin
+        ├── audit/            # Audit logging
+        ├── auth/             # Autenticazione
+        ├── beneficiary/      # Beneficiari
+        ├── card/             # Carte
+        ├── comuni/           # Lookup comuni italiani
+        ├── common/           # DTO generico paginazione
+        ├── config/           # DataInitializer, OpenAPI, WebMvc
+        ├── employee/         # Endpoint dipendente
+        ├── exception/        # Error handling
+        ├── notification/     # Notifiche
+        ├── savedbeneficiary/ # Beneficiari salvati
+        ├── security/         # JWT security
+        ├── transaction/      # Transazioni
+        ├── user/             # Utenti
+        └── validation/       # Validazione custom (Adult)
+
+    Ogni package dominio contiene:
+        controller/   — endpoint REST
+        dto/          — Data Transfer Object
+        model/        — Entity JPA
+        repository/   — Spring Data JPA
+        service/      — logica di business
+
+
+--- 11. CONFIGURAZIONE (application.yml) ---
+
+    server.port: 8081
+
+    spring:
+        datasource:
+            url: jdbc:postgresql://localhost:5432/javaisland_backend
+            username: bank_admin
+            password: bank_password
+
+        messages:
+            basename: messages          # messages.properties + messages_en.properties
+            encoding: UTF-8
+        mvc:
+            locale-resolver: accept-header   # risolve locale da Accept-Language
+
+        jpa:
+            hibernate.ddl-auto: update  # auto-create/alter tabelle
+            show-sql: true
+
+    app:
+        jwt:
+            issuer-uri: http://localhost:8080/realms/javaisland-realm
+
+    keycloak:
+        realm: javaisland-realm
+        auth-server-url: http://localhost:8080
+        client-id: bank-backend
+        admin-username: admin
+        admin-password: admin
+
+
+--- 12. MODELLI DI DOMINIO (ENTITY JPA) ---
+
+    USER
+    ────
+    Stato utente: PENDING -> ACTIVE -> (ANNULLED | SUSPENDED)
+    Ruolo: C (customer), D (employee), A (admin)
+    Flag: limitsSetupComplete, passwordChangedAt, profilePictureUrl
+    Validazione: @NotBlank, @Size, @Email, @Past (birthDate), @NotNull
+    Relazioni: status (ManyToOne LAZY), roleType (ManyToOne LAZY)
+
+    ACCOUNT
+    ───────
+    Stato: INACTIVE -> ACTIVE -> (FROZEN -> CLOSED)
+    Balance: BigDecimal, precision 15, scale 2
+    Optimistic locking: @Version version
+    Supporto apertura: sourceAccountNumber, initialAmount
+    Timestamps: createdAt, closedAt, closureRequestedAt, closureRejectedAt
+
+    CARD
+    ────
+    Numero: 16 cifre uniche, generato automaticamente
+    CVV: 3 cifre casuali
+    Scadenza: 5 anni dalla creazione
+    Stato: INACTIVE -> ACTIVE -> BLOCKED (irreversibile)
+    Tipo: DEBIT (emessa automaticamente), CREDIT
+
+    TRANSACTION
+    ───────────
+    Tipo: DEPOSIT, WITHDRAWAL, TRANSFER, INITIAL_TRANSFER, INSTANT_TRANSFER
+    Stato: PENDING, COMPLETED, FAILED, REJECTED, CANCELLED
+    Bilanci: sourceBalanceAfter, destBalanceAfter (storico)
+    Schedulazione: scheduledDate (per bonifici programmati)
+    Relazioni: sourceAccount, destinationAccount (ManyToOne LAZY)
+
+    ACCOUNT_LIMIT
+    ─────────────
+    Unique constraint: (account_id, limit_type_id)
+    ChangePolicy:
+        USER_FULL        — il cliente puo impostare qualsiasi valore
+        USER_LOWER_ONLY  — il cliente puo solo abbassare il limite
+        BANK_ONLY        — solo il dipendente puo modificare
+
+    NOTIFICATION
+    ────────────
+    I18n: messageKey (chiave traduzione) + messageParams (JSON array)
+    Il messaggio viene tradotto al ritorno in base all'Accept-Language
+    Tipo: ACCOUNT_ACTIVATED, TRANSFER_RECEIVED, ecc.
+
+    AUDIT_LOG
+    ──────────
+    Traccia ogni azione significativa: entityType, entityId, action, performedBy, details
+    Azioni: CREATE, VALIDATE, REJECT, REOPEN, DELETE, SUSPEND, ecc.
+
+
+--- 13. TABELLE LOOKUP E DATAINITIALIZER ---
+
+    DataInitializer implementa CommandLineRunner.
+    Al primo avvio, se le tabelle lookup sono vuote, le popola:
+
+    - 4 user_statuses (PENDING, ACTIVE, ANNULLED, SUSPENDED)
+    - 3 role_types (C, D, A)
+    - 3 card_statuses (INACTIVE, ACTIVE, BLOCKED)
+    - 2 card_types (DEBIT, CREDIT)
+    - 4 account_statuses (INACTIVE, ACTIVE, FROZEN, CLOSED)
+    - 6 limit_types con ChangePolicy e note descrittive
+    - 5 transaction_types (DEPOSIT, WITHDRAWAL, TRANSFER, INITIAL_TRANSFER, INSTANT_TRANSFER)
+    - 5 transaction_statuses (PENDING, COMPLETED, FAILED, REJECTED, CANCELLED)
+
+    Idempotenza: ogni seed verifica count() > 0 prima di inserire.
+
+
+--- 14. SECURITY — SECURITYCONFIG + JWT ---
+
+    SecurityFilterChain:
+        1. CORS configurato (3 origini permesse)
+        2. CSRF disabilitato (API REST stateless)
+        3. Autorizzazione:
+           - Swagger UI + OpenAPI: permitAll
+           - /api/v1/auth/register, /keycloak-login, /comuni, /uploads/**: permitAll
+           - Tutti gli altri: authenticated
+        4. OAuth2 Resource Server con JWT
+        5. JwtPasswordChangeFilter aggiunto DOPO BearerTokenAuthenticationFilter
+
+    JwtAuthenticationConverter:
+        - Usa AppRoleConverter per mappare realm roles → Spring Security authorities
+        - Ruolo C → ROLE_C, D → ROLE_D, A → ROLE_A
+
+    PasswordEncoder: BCryptPasswordEncoder
+
+
+--- 15. FILTRO JWTPASSWORDCHANGEFILTER ---
+
+    Esegue DOPO l'autenticazione JWT, su OGNI richiesta.
+
+    Logica:
+        1. Estrae keycloakId dal token JWT
+        2. Cerca utente nel DB con findByKeycloakIdWithStatus() (JOIN FETCH status)
+        3. Controlla stato utente:
+           - Se status != ACTIVE → 401 ACCOUNT_SUSPENDED
+        4. Controlla password:
+           - Se passwordChangedAt > token.iat → 401 TOKEN_REVOKED
+        5. Altrimenti → prosegue con la catena di filtri
+
+    Fix LazyInitializationException:
+        - Query personalizzata con JOIN FETCH u.status
+        - Evita LazyInitializationException fuori dalla sessione Hibernate
+
+
+--- 16. EXCEPTION HANDLING + I18N SERVER-SIDE ---
+
+    GlobalExceptionHandler (@RestControllerAdvice):
+
+    - handleApiBankException:
+      - Errori di business (USER_NOT_FOUND, ACCOUNT_INACTIVE, LIMIT_EXCEEDED, ecc.)
+      - Traduce messaggio via MessageSource con locale da Accept-Language
+      - Risposta 400 con errorCode + message tradotto
+
+    - handleValidation:
+      - MethodArgumentNotValidException (errori @Valid sui DTO)
+      - Raccoglie tutti i campi invalidi in un'unica stringa
+
+    - handleConstraintViolation:
+      - ConstraintViolationException (errori JPA/validazione entita)
+
+    - handleGeneric:
+      - Fallback per eccezioni non gestite
+      - Risposta 500 INTERNAL_ERROR
+      - Nessun dettaglio esposto al client
+
+    Messaggi di errore:
+        messages.properties (IT):
+            USER_NOT_FOUND=Utente non trovato
+            ACCOUNT_INACTIVE=Account non attivo
+            INSUFFICIENT_FUNDS=Saldo insufficiente
+            LIMIT_EXCEEDED=Limite operativo superato
+            ...
+
+        messages_en.properties (EN):
+            USER_NOT_FOUND=User not found
+            ACCOUNT_INACTIVE=Account not active
+            ...
+
+
+--- 17. API ENDPOINTS — RIFERIMENTO COMPLETO ---
+
+    PUBLIC (nessuna autenticazione)
+    ───────────────────────────────
+    POST    /api/v1/auth/register              Registrazione pubblica
+    POST    /api/v1/auth/keycloak-login         Login Keycloak ROPC
+    GET     /api/v1/comuni                      Lookup comuni italiani
+    GET     /api/v1/comuni/{nome}               Cerca comune per nome
+    GET     /swagger-ui.html                    Documentazione API
+    GET     /v3/api-docs                        OpenAPI JSON
+
+    CUSTOMER [C]
+    ─────────────
+    Account:
+        GET     /api/v1/customer/accounts                    Lista miei conti
+        GET     /api/v1/customer/accounts/holder-info         Info intestatario
+        GET     /api/v1/customer/accounts/monthly-summary     Riepilogo mensile
+        POST    /api/v1/customer/accounts/open                Apri conto aggiuntivo
+        POST    /api/v1/customer/accounts/closure-request     Richiesta chiusura
+        GET     /api/v1/customer/accounts/{number}            Dettaglio conto
+        GET     /api/v1/customer/accounts/{number}/limits     Limiti conto
+        PUT     /api/v1/customer/accounts/{number}/limits/{type}  Imposta limite
+        PUT     /api/v1/customer/accounts/limits-setup-complete   Segna setup completo
+
+    Transazioni:
+        POST    /api/v1/customer/transactions/deposit         Deposito
+        POST    /api/v1/customer/transactions/withdraw        Prelievo
+        POST    /api/v1/customer/transactions/transfer        Bonifico
+        GET     /api/v1/customer/transactions/recent/{number} Ultime 10
+        GET     /api/v1/customer/transactions/all             Storico paginato
+
+    Carte:
+        GET     /api/v1/customer/cards                        Lista miei carte
+        GET     /api/v1/customer/cards/{id}                   Dettaglio carta
+        GET     /api/v1/customer/cards/{id}/sensitive          Dati completi (PAN+CVV)
+
+    Beneficiari:
+        GET     /api/v1/customer/beneficiaries                Lista
+        POST    /api/v1/customer/beneficiaries                Aggiungi
+        DELETE  /api/v1/customer/beneficiaries/{id}           Elimina
+
+    Beneficiari salvati:
+        GET     /api/v1/customer/saved-beneficiaries          Lista salvati
+        POST    /api/v1/customer/saved-beneficiaries          Salva
+        DELETE  /api/v1/customer/saved-beneficiaries/{id}     Elimina
+
+    Profilo:
+        GET     /api/v1/customer/profile                      Profilo completo
+        POST    /api/v1/profile-picture                       Upload foto
+        DELETE  /api/v1/profile-picture                       Elimina foto
+
+    Notifiche:
+        GET     /api/v1/customer/notifications                Lista notifiche
+        PUT     /api/v1/customer/notifications/{id}/read      Segna letta
+
+    PIN:
+        POST    /pin/setup                                    Configura PIN
+        GET     /pin/status                                   Stato PIN
+        POST    /pin/verify                                   Verifica PIN
+
+    Password:
+        POST    /api/v1/customer/password-change              Richiesta cambio
+
+    Limiti:
+        POST    /api/v1/customer/limit-change                 Richiesta cambio limite
+
+    Richieste:
+        GET     /api/v1/customer/requests                     Lista miei requesti
+
+    EMPLOYEE [D]
+    ─────────────
+    Registrazioni:
+        GET     /api/v1/employee/users/registrations/pending      In attesa
+        PUT     /api/v1/employee/users/registrations/{id}/validate Valida
+        PUT     /api/v1/employee/users/registrations/{id}/reject   Rifiuta
+        GET     /api/v1/employee/users/registrations/refused       Rifiutate
+        PUT     /api/v1/employee/users/registrations/{id}/reopen   Riapri
+        DELETE  /api/v1/employee/users/registrations/{id}          Elimina utente
+
+    Clienti:
+        GET     /api/v1/employee/users/customers              Lista clienti
+
+    Account:
+        GET     /api/v1/employee/accounts                     Tutti i conti
+        GET     /api/v1/employee/accounts/user/{id}           Conti per utente
+        GET     /api/v1/employee/accounts/{number}            Dettaglio
+        PUT     /api/v1/employee/accounts/{number}/activate   Attiva
+        PUT     /api/v1/employee/accounts/{number}/freeze     Congela
+        PUT     /api/v1/employee/accounts/{number}/closure/validate  Valida chiusura
+        PUT     /api/v1/employee/accounts/{number}/closure/reject    Rifiuta chiusura
+        GET     /api/v1/employee/accounts/{number}/limits     Limiti
+        PUT     /api/v1/employee/accounts/{number}/limits/{type}  Imposta limite
+
+    Carte:
+        GET     /api/v1/employee/cards                        Tutte le carte
+        GET     /api/v1/employee/cards/{id}                   Dettaglio
+        GET     /api/v1/employee/accounts/{number}/cards      Carte per conto
+        PATCH   /api/v1/employee/cards/{id}/status            Aggiorna stato
+
+    Richieste:
+        GET     /api/v1/employee/requests/pending-password    Richieste cambio password
+        PUT     /api/v1/employee/requests/{id}/approve        Approva
+        PUT     /api/v1/employee/requests/{id}/reject         Rifiuta
+
+    ADMIN [A]
+    ──────────
+    Dashboard:
+        GET     /api/v1/admin/dashboard                       Statistiche aggregate
+
+    Dipendenti:
+        GET     /api/v1/admin/employees                       Lista
+        POST    /api/v1/admin/employees                       Crea
+        GET     /api/v1/admin/employees/{id}                  Dettaglio
+        PUT     /api/v1/admin/employees/{id}/suspend          Sospendi (force logout)
+
+    Clienti:
+        GET     /api/v1/admin/customers                       Lista
+        GET     /api/v1/admin/customers/{id}                  Dettaglio
+
+    Account:
+        GET     /api/v1/admin/accounts                        Lista
+        GET     /api/v1/admin/accounts/{number}               Dettaglio
+
+    Transazioni:
+        GET     /api/v1/admin/transactions                    Lista
+
+    Audit Log:
+        GET     /api/v1/admin/audit-logs                      Lista paginata
+
+    Limiti:
+        GET     /api/v1/admin/limits                          Lista tipi
+        PUT     /api/v1/admin/limits/{type}                   Aggiorna globale
+
+    Export:
+        GET     /api/users/export                             Export clienti
+
+
+--- 18. SERVIZI PRINCIPALI ---
+
+    RegistrationService
+        register(RegisterRequestDto) → crea utente + account iniziale
+        validateRegistration(userId) → crea Keycloak user + attiva account + emette carta
+        rejectRegistration(userId) → imposta stato ANNULLED
+        reopenRegistration(userId) → imposta stato PENDING
+        deleteUserAndAccount(userId) → delete cascading (cards, limits, beneficiaries, notifiche, pins, Keycloak user, utente)
+
+    AccountService
+        createInitialAccountForUser(user) → account INACTIVE
+        activateInitialAccountForUser(userId) → INACTIVE -> ACTIVE
+        openAdditionalAccount(userId, dto) → nuovo conto con bonifico iniziale
+        requestClosure(dto) → segna closureRequestedAt
+        activateAccount / freezeAccount / validateClosure / rejectClosure
+
+    TransactionService
+        deposit / withdraw / transfer → validazioni (proprietà, stato, saldo, limiti)
+        Paginazione con Specification + date filter
+
+    CardService
+        Emissione automatica DEBIT card su validazione registrazione
+        Numero carta unico, CVV casuale, scadenza 5 anni
+        Stato: INACTIVE -> ACTIVE -> BLOCKED
+
+    NotificationService
+        send(userId, type, message) → crea notifica in DB
+        send(userId, type, messageKey, messageParams) → i18n
+        getNotifications(userId, locale) → traduce messageKey + params al ritorno
+        markAsRead / markAllAsRead
+
+    AdminEmployeeService
+        createEmployee → crea utente + Keycloak user
+        suspendEmployee → logout Keycloak + disabilita + notifica
+        activateEmployee → riabilita
+
+    AuditLogService
+        log(entityType, entityId, action, performedBy, details) → scrivi audit log
+
+    PasswordChangeService
+        requestPasswordChange → crea richiesta PENDING
+        approveRequest → aggiorna password + imposta passwordChangedAt
+
+    UserPinService
+        setupPin / verifyPin / getPinStatus
+        PIN hashato con BCrypt
+
+
+--- 19. SCHEDULER — SCHEDULEDTRANSFERPROCESSOR ---
+
+    @Scheduled: controlla periodicamente le transazioni PENDING con scheduledDate
+    Se scheduledDate <= now:
+        - Esegue il trasferimento
+        - Aggiorna stato -> COMPLETED o FAILED
+        - Registra audit log
+
+
+================================================================================
+PARTE FRONTEND
+================================================================================
+
+
+--- 20. STRUTTURA PROGETTO ANGULAR ---
+
+    src/app/
+    ├── core/
+    │   ├── guards/           7 guard functions
+    │   ├── interceptors/     auth.interceptor.ts
+    │   ├── models/           31 DTO interfaces (9 domini)
+    │   └── services/         7 services (auth, customer, employee, admin, notification, toast, comuni)
+    ├── layout/
+    │   └── layout.*          Shell: sidebar + bottom nav + notifications + language switcher
+    ├── pages/
+    │   ├── auth/             2 componenti (login, register)
+    │   ├── customer/         15 componenti
+    │   ├── employee/         7 componenti
+    │   └── admin/            6 componenti
+    ├── app.routes.ts         Routing completo con guard
+    ├── app.config.ts         Bootstrap providers + i18n config
+    └── app.*                 Root component
+
+    Totale: 30 componenti pagina, ciascuno con .component.ts, .html, .css
+
+
+--- 21. CONFIGURAZIONE (app.config.ts) ---
+
+    Providers:
+        provideRouter(routes)
+        provideHttpClient(withInterceptors([authInterceptor]))
+        provideAnimations()
+        provideTranslateService(fallbackLang: 'it')
+        provideTranslateHttpLoader(prefix: './assets/i18n/', suffix: '.json')
+        APP_INITIALIZER → initializeTranslate (ripristina lingua da localStorage)
+
+
+--- 22. ROUTING E GUARD ---
+
+    ROUTES PRINCIPALI
+    ─────────────────
+    /login              LoginComponent         loginRedirectGuard
+    /register           RegisterComponent      nessuno
+
+    /customer/*         LayoutComponent        roleGuard('C') + limitsSetupGuard
+        /dashboard      CustomerDashboardComponent
+        /accounts       CustomerAccountsComponent
+        /accounts/:n    CustomerAccountDetailComponent
+        /transactions   CustomerTransactionsComponent
+        /beneficiaries  CustomerBeneficiariesComponent
+        /limits         CustomerLimitsComponent
+        /cards          CustomerCardsComponent
+        /saved-beneficiaries  CustomerSavedBeneficiariesComponent
+        /profile        CustomerProfileComponent
+        /requests       CustomerRequestsComponent
+        /notifications  CustomerNotificationsComponent
+
+    /customer/limits-setup   CustomerLimitsSetupComponent   limitsSetupPageGuard
+    /customer/pin-setup      PinSetupComponent              pinSetupPageGuard
+    /customer/pin-verify     PinVerifyComponent             pinVerifyPageGuard
+
+    /employee/*         LayoutComponent        roleGuard('D')
+        /dashboard      EmployeeDashboardComponent
+        /registrations  EmployeeRegistrationsComponent
+        /accounts       EmployeeAccountsComponent
+        /limits         EmployeeLimitsComponent
+        /cards          EmployeeCardsComponent
+        /customers      EmployeeCustomersComponent
+        /requests       EmployeeRequestsComponent
+
+    /admin/*            LayoutComponent        roleGuard('A')
+        /dashboard      AdminDashboardComponent
+        /employees      AdminEmployeesComponent
+        /customers      AdminCustomersComponent
+        /accounts       AdminAccountsComponent
+        /transactions   AdminTransactionsComponent
+        /audit-logs     AdminAuditLogsComponent
+
+    GUARD
+    ─────
+    authGuard               — verifica login
+    roleGuard(role)         — verifica ruolo
+    limitsSetupGuard        — customer: redirect a limits-setup se non completato
+    limitsSetupPageGuard    — permette accesso solo se setup non completato
+    pinSetupPageGuard       — permette accesso solo se PIN non configurato
+    pinVerifyPageGuard      — permette accesso solo se PIN non verificato
+    loginRedirectGuard      — se gia loggato, redirect al pannello corretto
+
+
+--- 23. INTERCEPTOR HTTP ---
+
+    auth.interceptor.ts
+
+    Comportamento:
+        1. Salta richieste /assets/i18n/
+        2. Aggiunge Accept-Language: it|en
+        3. Se token presente:
+           a. Verifica scadenza client-side
+           b. Se scaduto → logout + redirect login
+           c. Altrimenti aggiunge Authorization: Bearer <token>
+        4. Clona richiesta con headers
+        5. Gestisce errori:
+           - 401: mostra toast con messaggio backend → logout + redirect login
+
+
+--- 24. LAYOUT SHELL (SIDEBAR + BOTTOM NAV) ---
+
+    LayoutComponent (206 lines)
+
+    Signals: mobileMenuOpen, showUploadModal, uploading, uploadError,
+             unreadCount, showNotifications, notifications, currentLang
+
+    Features:
+        - Sidebar fisso su desktop (260px), slide-in su mobile
+        - Bottom nav su mobile (icone SVG)
+        - Hamburger menu su mobile
+        - Notification bell (solo customer) con dropdown click-outside
+        - Language switcher IT/EN (persiste in localStorage)
+        - Profile picture: upload (modal), delete, preview
+        - Role badge nella sidebar
+        - Route animations
+
+    Template (358 lines):
+        - Skip-to-content link (accessibilita)
+        - Mobile topbar: hamburger, logo, notifiche, logout
+        - Desktop navbar: logo, nav links, language switcher, notifiche, avatar, logout
+        - Mobile sidebar: logo, avatar, role badge, nav links, language switcher, logout
+        - Main content: <router-outlet> con routeAnimation
+        - Toast: <app-toast>
+        - Mobile bottom nav: 5 tabs customer, 5 tabs employee, 3 tabs admin
+        - Profile upload modal: preview, change, remove, error display
+
+
+--- 25. SERVIZI API ---
+
+    AuthService (166 lines)
+        API: http://localhost:8081/api/v1/auth
+        register(), login(), uploadProfilePicture(), deleteProfilePicture()
+        saveSession(), getToken(), getUser(), getProfilePictureUrl()
+        setupPin(), verifyPin(), getPinStatus()
+        isPinVerified(), setPinVerified(), clearPinVerified()
+        logout(), isLoggedIn(), isTokenExpired()
+
+    CustomerService (314 lines)
+        API: http://localhost:8081/api/v1/customer
+        Accounts: getAccounts(), getAccountDetail(), openAccount(), closureRequest(),
+                  getAccountLimits(), setAccountLimit(), completeLimitsSetup(),
+                  isLastActiveAccount(), getAccountHolderInfo(), getMonthlySummary()
+        Profile: getProfile(), requestPasswordChange(), requestLimitChange(), getMyRequests()
+        Transactions: deposit(), withdraw(), transfer(), getRecentTransactions(),
+                      getAllTransactions() (paginato), getAccountTransactions()
+        Cards: getCards(), getCardDetail(), getCardSensitive()
+        Beneficiaries: getBeneficiaries(), saveBeneficiary(), deleteBeneficiary(),
+                       checkBeneficiary(), renameBeneficiary()
+        Saved: getSavedBeneficiaries(), saveSavedBeneficiary(), deleteSavedBeneficiary()
+
+    EmployeeService (285 lines)
+        API: http://localhost:8081/api/v1/employee
+        Registrations: getPendingRegistrations(), validateRegistration(), rejectRegistration(),
+                       getRefusedRegistrations(), reopenRegistration(), deleteUser()
+        Customers: getCustomers()
+        Accounts: getAccounts(), getAccountsByUser(), getAccountDetail(),
+                  activateAccount(), freezeAccount(), validateClosure(), rejectClosure()
+        Cards: getCards(), getCardDetail(), blockCard(), getCardsByAccount()
+        Requests: getPendingPasswordRequests(), approvePasswordRequest(), rejectPasswordRequest()
+
+    AdminService (203 lines)
+        API: http://localhost:8081/api/v1/admin
+        getDashboard(), getEmployees(), createEmployee(), suspendEmployee()
+        getAuditLogs(), getEmployeeDetail()
+        getCustomers(), getCustomerDetail()
+        getAdminAccounts(), getAdminTransactions()
+
+    NotificationService (58 lines)
+        API: http://localhost:8081/api/v1/customer/notifications
+        getNotifications(), getUnreadCount(), markAsRead(), markAllAsRead()
+
+    ToastService (43 lines)
+        Signal-based. show(), success(), error(), info(), warning(), dismiss()
+        Auto-dismiss via setTimeout.
+
+
+--- 26. MODELLI DTO ---
+
+    account/
+        AccountResponseDto         accountNumber, balance, statusId, profileId, initialAmount, createdAt
+        AccountLimitResponseDto    id, limitType, maxAmount, updatedAt, changePolicy
+        SetLimitRequestDto         maxAmount
+        OpenAccountRequestDto      sourceAccountNumber, initialAmount
+        CloseAccountRequestDto     accountNumber
+
+    auth/
+        LoginRequestDto            username, password
+        LoginResponseDto           token, role, userId, firstName, lastName, email,
+                                   limitsSetupComplete, pinSetupComplete, profilePictureUrl
+        RegisterRequestDto         firstName, lastName, birthDate, email, password,
+                                   gender, profession, fiscalCode, phone, residence,
+                                   birthPlace, birthProvince
+
+    beneficiary/
+        BeneficiaryRequestDto      nickname, destinationAccountNumber
+        BeneficiaryResponseDto     id, nickname, destinationAccountNumber, createdAt
+
+    card/
+        CardResponseDto            id, maskedCardNumber, holderName, expirationDate,
+                                   cardType, status, accountId, accountNumber
+        CardSensitiveDto           cardNumber, cvv
+
+    common/
+        ErrorResponseDto           timestamp, status, errorCode, message
+        PageResponseDto<T>         content, page, size, totalElements, totalPages, last
+
+    transaction/
+        TransactionRequestDto      accountNumber, amount
+        TransactionResponseDto     id, amount, typeId, statusId, typeName, statusName,
+                                   description, createdAt, sourceAccountNumber,
+                                   destinationAccountNumber, sourceBalanceAfter
+        TransferRequestDto         sourceAccountNumber, destinationAccountNumber,
+                                   beneficiaryId, amount, description, isInstant, scheduledDate
+
+    user/
+        PendingRegistrationDto     userId, firstName, lastName, birthDate, email, registeredAt
+        CustomerProfileDto         userId, username, firstName, lastName, email, birthDate,
+                                   profession, gender, fiscalCode, phone, residence,
+                                   birthPlace, birthProvince, userStatus, registeredAt,
+                                   totalAccounts, activeAccounts, totalCards, activeCards
+        CustomerListItemDto        userId, firstName, lastName, email, statusId
+
+
+--- 27. COMPONENTI PER RUOLO ---
+
+    AUTH (2)
+    ────────
+    LoginComponent              Form email + password, link registrazione, language switcher
+    RegisterComponent           Form completo dati anagrafici, autocomplete comuni, language switcher
+
+    CUSTOMER (15)
+    ─────────────
+    CustomerDashboardComponent  Hero, saldi conti, carosello carte, transazioni recenti,
+                                quick actions, notifiche, sidebar
+    CustomerAccountsComponent   Lista conti, apertura nuovo conto
+    CustomerAccountDetailComponent  Dettaglio conto, saldo, movimenti, limiti
+    CustomerTransactionsComponent   Deposito, prelievo, bonifico, storico paginato
+    CustomerBeneficiariesComponent  CRUD beneficiari
+    CustomerCardsComponent      Lista carte, dettaglio, reveal CVV
+    CustomerSavedBeneficiariesComponent  Beneficiari salvati per bonifici rapidi
+    CustomerLimitsComponent     Visualizzazione + modifica limiti operativi
+    CustomerLimitsSetupComponent   Setup iniziale obbligatorio 6 limiti
+    CustomerProfileComponent    Dati personali, foto profilo, cambio password, PDF
+    CustomerNotificationsComponent  Lista notifiche con segna come letta
+    CustomerRequestsComponent   Lista richieste (pending/approved/rejected)
+    PinSetupComponent           Configurazione PIN 6 cifre
+    PinVerifyComponent          Verifica PIN per operazioni sensibili
+
+    EMPLOYEE (7)
+    ────────────
+    EmployeeDashboardComponent  KPI cards, quick actions, overview, notifiche, tips
+    EmployeeRegistrationsComponent  Tab pending/refused, valuta/rifiuta/riapri/elimina
+    EmployeeAccountsComponent   Gestione conti (attiva, congela, chiudi), limiti
+    EmployeeCardsComponent      Gestione carte (stato), dettaglio
+    EmployeeLimitsComponent     Impostazione limiti per conto
+    EmployeeCustomersComponent  Lista + dettaglio clienti
+    EmployeeRequestsComponent   Gestione richieste cliente (password, limiti)
+
+    ADMIN (6)
+    ─────────
+    AdminDashboardComponent     Hero, 4 KPI cards, overview, quick actions, sidebar
+    AdminEmployeesComponent     CRUD dipendenti, sospensione con force logout
+    AdminCustomersComponent     Lista + dettaglio clienti
+    AdminAccountsComponent      Lista + gestione conti
+    AdminTransactionsComponent  Cronologia transazioni con filtri
+    AdminAuditLogsComponent     Log audit con filtri azione (REOPEN, DELETE, ecc.)
+
+
+--- 28. PAGINE E FUNZIONALITA ---
+
+    LOGIN
+    ─────
+    - Form email + password
+    - Language switcher (IT/EN)
+    - Link "Non hai un account? Registrati"
+    - Gestione errori con toast
+    - Redirect automatico se gia loggato
+
+    REGISTRAZIONE
+    ─────────────
+    - Form completo: nome, cognome, data nascita, email, password,
+      genere, professione, codice fiscale, telefono, residenza,
+      luogo nascita, provincia nascita
+    - Autocomplete comuni italiani
+    - Validazione client-side (campi obbligatori, formato email, CF 16 cifre)
+    - Language switcher
+
+    LIMITS SETUP (PRIMO ACCESSO)
+    ────────────────────────────
+    - 6 limiti: DAILY_TRANSFER, SINGLE_TRANSFER, INSTANT_TRANSFER_SINGLE,
+      MONTHLY_TRANSFER, ATM_WITHDRAWAL, POS_SPENDING
+    - Policy color-coded: USER_FULL (verde), USER_LOWER_ONLY (arancione), BANK_ONLY (rosso)
+    - Conferma disabilitata finche tutti i 6 limiti non sono impostati
+    - Background gradient navy con decorazioni
+
+    PIN SETUP
+    ─────────
+    - Configurazione PIN 6 cifre
+    - Obbligatorio prima di poter operare
+    - salvato hashato con BCrypt
+
+    PIN VERIFY
+    ──────────
+    - Verifica PIN per operazioni sensibili
+    - Session-based (pin_verified in localStorage)
+
+    DASHBOARD CUSTOMER
+    ──────────────────
+    - Hero banner con saluto personalizzato + data
+    - 3 KPI cards (saldo totale, conti attivi, transazioni recenti)
+    - Carosello carte (3D perspective, ±1 card visibile)
+    - Transazioni recenti con icone per tipo
+    - Quick actions (deposito, prelievo, bonifico)
+    - Sidebar: notifiche, consigli
+
+    DASHBOARD EMPLOYEE
+    ──────────────────
+    - Hero banner
+    - 3 KPI cards (registrazioni in attesa, conti totali, clienti)
+    - Quick actions (registrazioni, conti, carte)
+    - Overview grid (clienti, conti, in attesa)
+    - Sidebar: notifiche, statistiche, tips
+
+    DASHBOARD ADMIN
+    ───────────────
+    - Hero banner con data
+    - 4 KPI cards (clienti, dipendenti, conti, saldo totale)
+    - Overview grid (conti attivi, bloccati, registrazioni, transazioni)
+    - Quick actions (clienti, dipendenti, conti, transazioni, audit)
+    - Sidebar: stato sistema, statistiche, tips
+
+    REGISTRAZIONI DIPENDENTE
+    ────────────────────────
+    - Tab "In Attesa" + tab "Rifiutate"
+    - Card con: avatar, nome, cognome, email, data registrazione
+    - Azioni: Valida (verde), Rifiuta (rosso)
+    - Tab rifiutate: Riapri (oro), Elimina (rosso)
+    - Conferma eliminazione con modale
+
+    TRANSAZIONI
+    ───────────
+    - Form deposito/prelievo: selezione conto + importo
+    - Form bonifico: conto sorgente + destinatario + importo + descrizione
+    - Beneficiario: selezione da lista salvati
+    - Bonifico istantaneo: toggle opzionale
+    - Storico paginato con filtri data (max 30 giorni)
+    - Badge colore per tipo/stato transazione
+
+    CARTE
+    ─────
+    - Card design con gradient (DEBIT=navy, CREDIT=gold)
+    - Numero mascherato (**** **** **** 1234)
+    - Toggle per mostrare dati sensibili (PAN + CVV)
+    - Scadenza, stato, tipo
+
+    PROFILO
+    ───────
+    - Dati personali in modale/modifica
+    - Foto profilo: upload, delete, preview
+    - Estratto conto PDF (jsPDF): header tradotto, tabella movimenti, paginazione
+    - Richiesta cambio password
+
+    NOTIFICHE
+    ─────────
+    - Dropdown nel layout (icona campanella + badge conteggio)
+    - Pagina dedicata con lista completa
+    - Click per segnare come letta
+    - Mark all read
+    - Polling ogni 10 secondi (solo customer)
+
+    AUDIT LOG (ADMIN)
+    ─────────────────
+    - Tabella con: data, azione, entita, eseguito da, dettagli
+    - Filtri per azione (VALIDATE, REJECT, REOPEN, DELETE, SUSPEND, ecc.)
+    - Badge colore per tipo azione
+    - Paginazione
+
+
+--- 29. DARK MODE ---
+
+    Implementato a livello globale + componenti.
+
+    Variabili CSS (dark):
+        --bi-bg:    #0f172a
+        --bi-text:  #e2e8f0
+        --bi-surface: #1e293b
+        --bi-border: #334155
+
+    Attivazione:
+        - prefers-color-scheme: dark (automatico dal SO)
+        - data-bs-theme="dark" (Bootstrap 5.3 class-based)
+
+    Componenti supportate:
+        - Card (tutte le varianti)
+        - Tabelle (header, bordi, hover)
+        - Form (input, select, textarea)
+        - Sidebar
+        - Bottom nav
+        - Modal
+        - Badge
+        - Toast
+        - Notifications dropdown
+        - Hero banner
+        - KPI cards, Action cards, Overview cards
+        - Sidebar cards (notifiche, statistiche, tips)
+
+
+--- 30. RESPONSIVE DESIGN ---
+
+    BREAKPOINTS
+    ───────────
+    < 768px      Mobile    — topbar + hamburger + bottom nav, 1 colonna, modal slide-up
+    >= 768px     Tablet    — sidebar fisso 240px, grid multi-colonne, modal centrati
+    >= 1024px    Desktop   — sidebar 260px, padding ampio
+
+    MOBILE (< 768px)
+    ────────────────
+    - Top bar con hamburger menu, logo, notifiche, logout
+    - Sidebar: slide-in drawer con avatar, ruolo, nav links
+    - Bottom nav: 5-6 icone SVG con indicatori attivi
+    - Tabelle: scroll orizzontale, min-width per leggibilita
+    - Form: stack verticali, font-size 16px (evita zoom iOS)
+    - Modal: slide-up dal basso
+    - Card: padding ridotto, font ridotto
+
+    TABLET (768px - 1023px)
+    ────────────────────────
+    - Sidebar fisso 240px
+    - Bottom nav nascosto
+    - Grid multi-colonne
+    - Modal centrati
+
+    DESKTOP (>= 1024px)
+    ────────────────────
+    - Sidebar 260px
+    - Padding piu ampio
+    - Tutti i layout a 2 colonne (main + sidebar)
+
+    ACCESSIBILITA
+    ─────────────
+    - Skip-to-content link
+    - :focus-visible con outline gold
+    - prefers-reduced-motion: reduce (disabilita animazioni)
+    - iOS safe-area padding per bottom nav
+    - Font size 16px sugli input (evita zoom iOS)
+
+
+================================================================================
+FINE DOCUMENTAZIONE
+================================================================================
+
+    Versione: 1.0
+    Data: Luglio 2026
+    Progetto: EldenBank — Banca Digitale Full-Stack
+    Backend: Java Spring Boot 3.4 + PostgreSQL 15 + Keycloak 24
+    Frontend: Angular 22 + TypeScript 6 + Bootstrap 5.3
+
+================================================================================

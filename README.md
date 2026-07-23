@@ -30,6 +30,7 @@ REST API for digital banking services.
 - **API Docs**: Springdoc OpenAPI 2.8 (Swagger UI integrated)
 - **Organization**: Screaming Architecture — packages per domain (`account`, `user`, `card`, `transaction`)
 - **Containers**: Docker Compose for PostgreSQL and Keycloak
+- **i18n**: Server-side translations for error messages and notifications via `MessageSource` with locale from `Accept-Language` header
 
 ### Architectural Decisions
 
@@ -39,9 +40,10 @@ REST API for digital banking services.
 | Lookup Tables | Statuses and types in dedicated tables referenced via FK. Referential integrity, no duplicate strings, extensible without changing Java code. |
 | DataInitializer | Automatic domain table seeding on first startup. Idempotent (checks row count before inserting). |
 | JWT via Keycloak | OAuth2 standard, automatic JWK rotation, SSO-ready, roles mapped via realm roles. |
-| GlobalExceptionHandler | Centralized error handling for business errors (`ApiBankException`), validation (`MethodArgumentNotValidException`), JPA constraint violations, and generic fallback. |
+| GlobalExceptionHandler | Centralized error handling for business errors (`ApiBankException`), validation (`MethodArgumentNotValidException`), JPA constraint violations, and generic fallback. Supports server-side i18n via `MessageSource`. |
 | DTOs with Validation | Every endpoint uses dedicated DTOs with `jakarta.validation` constraints. No entity exposed directly. |
 | Lombok | Boilerplate reduction (getter, setter, builder, constructors). |
+| Server-side i18n | Error messages and notifications translated server-side using `MessageSource` with `Accept-Language` header. Error codes used as translation keys. |
 
 ---
 
@@ -59,6 +61,7 @@ REST API for digital banking services.
 | API Docs | Springdoc OpenAPI | 2.8.5 |
 | Utilities | Lombok | 1.18.36 |
 | Container | Docker Compose | 3.8 |
+| i18n | Spring MessageSource | (built-in) |
 
 ---
 
@@ -317,7 +320,7 @@ Full schema in [database-schema.txt](database-schema.txt).
 | `beneficiaries` | Contact list for transfers. FK → `users`, unique(user_id, destination_account_number) |
 | `saved_beneficiaries` | Saved beneficiaries for quick transfers. FK → `users` |
 | `transactions` | Account movements. FK → `transaction_types`, `transaction_statuses` |
-| `notifications` | User notifications. FK → `users` |
+| `notifications` | User notifications with i18n support. FK → `users`. Columns: `message_key`, `message_params` (JSON array) |
 | `audit_logs` | System audit trail |
 
 ---
@@ -351,7 +354,7 @@ Starts:
    - Client authentication: `OFF`
    - Standard flow: `OFF`
    - Direct access grants: `ON`
-4. **Realm roles** → Create: `C`, `D`
+4. **Realm roles** → Create: `C`, `D`, `A`
 5. Create users and assign roles
 
 ### 6.3. Start application
@@ -494,7 +497,7 @@ Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REA
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/` | List my notifications |
+| GET | `/` | List my notifications (translated server-side) |
 | PUT | `/{id}/read` | Mark notification as read |
 
 ### Customer — PIN — `/pin` `[C]`
@@ -526,6 +529,9 @@ Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REA
 | GET | `/registrations/pending` | Pending registrations |
 | PUT | `/registrations/{userId}/validate` | Validate registration + activate account + issue card |
 | PUT | `/registrations/{userId}/reject` | Reject registration |
+| GET | `/registrations/refused` | List refused registrations |
+| PUT | `/registrations/{userId}/reopen` | Reopen refused registration (status → PENDING) |
+| DELETE | `/registrations/{userId}` | Delete refused user + all related data |
 | GET | `/customers` | List all customers sorted by name |
 
 ### Employee — Cards — `/api/v1/employee` `[D]`
@@ -550,7 +556,7 @@ Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REA
 | GET | `/` | List all employees |
 | POST | `/` | Create new employee |
 | GET | `/{id}` | Employee detail |
-| PUT | `/{id}/suspend` | Suspend employee |
+| PUT | `/{id}/suspend` | Suspend employee (force logout + disable) |
 
 ### Admin — Limits — `/api/v1/admin/limits` `[A]`
 
@@ -593,6 +599,8 @@ Standard error response format:
 }
 ```
 
+Messages are translated server-side based on `Accept-Language` header (Italian default, English supported).
+
 ### Business Errors
 
 | Error Code | HTTP | Description |
@@ -600,6 +608,7 @@ Standard error response format:
 | `USER_NOT_FOUND` | 400 | User not found |
 | `ACCOUNT_NOT_FOUND` | 400 | Account not found |
 | `ACCOUNT_INACTIVE` | 400 | Account not active |
+| `ACCOUNT_SUSPENDED` | 401 | Account suspended (force logout) |
 | `INVALID_ACCOUNT_STATE` | 400 | Operation not allowed on current state |
 | `INSUFFICIENT_FUNDS` | 400 | Insufficient balance |
 | `LIMIT_EXCEEDED` | 400 | Operational limit exceeded (daily, monthly, single) |
@@ -630,7 +639,9 @@ Standard error response format:
 
 1. Customer registers → status `PENDING`, account `INACTIVE`, no card issued
 2. Employee validates → status `ACTIVE`, account `ACTIVE`, DEBIT card `ACTIVE` issued automatically
-3. Employee can reject or cancel registration
+3. Employee can reject registration
+4. Employee can reopen refused registrations (status → `PENDING`)
+5. Employee can delete refused users (cascading cleanup: cards, limits, beneficiaries, notifications, Keycloak user, etc.)
 
 ### 10.2. Bank Accounts
 
@@ -661,16 +672,17 @@ Standard error response format:
 
 - Pending registration list
 - Registration validation/rejection
+- Refused registrations management (reopen, delete with cascading cleanup)
 - Customer list sorted by name
 - Account management (activate, freeze, close)
 - Card management (status)
 
 ### 10.6. Admin Dashboard
 
-- Aggregated statistics
-- Employee CRUD management
+- Aggregated statistics (customers, employees, accounts, balance, transactions)
+- Employee CRUD management with force logout on suspend
 - Global limit configuration
-- Audit log viewer
+- Audit log viewer with action filtering
 
 ### 10.7. Saved Beneficiaries
 
@@ -688,11 +700,20 @@ Standard error response format:
 
 - Password change with automatic token invalidation via `JwtPasswordChangeFilter`
 - Old tokens rejected after password change
+- User status check (SUSPENDED/ANNULLED → force logout)
 
 ### 10.10. Notifications
 
 - Customer notifications for account events
 - Mark as read functionality
+- Server-side i18n: notifications stored with `message_key` + `message_params`, translated on retrieval based on `Accept-Language` header
+
+### 10.11. Internationalization (i18n)
+
+- Error messages translated server-side via `MessageSource`
+- Notification messages stored as translation keys with parameters
+- Locale resolved from `Accept-Language` header
+- Default: Italian (`messages.properties`), English (`messages_en.properties`)
 
 ---
 
@@ -798,31 +819,50 @@ curl -X GET "http://localhost:8081/api/v1/customer/transactions/all?start=2026-0
 ```bash
 # List pending
 curl -X GET http://localhost:8081/api/v1/employee/users/registrations/pending \
-  -H "Authorization: Bearer <admin-token>"
+  -H "Authorization: Bearer <employee-token>"
 
 # Validate
 curl -X PUT http://localhost:8081/api/v1/employee/users/registrations/{userId}/validate \
-  -H "Authorization: Bearer <admin-token>"
+  -H "Authorization: Bearer <employee-token>"
+
+# List refused
+curl -X GET http://localhost:8081/api/v1/employee/users/registrations/refused \
+  -H "Authorization: Bearer <employee-token>"
+
+# Reopen refused
+curl -X PUT http://localhost:8081/api/v1/employee/users/registrations/{userId}/reopen \
+  -H "Authorization: Bearer <employee-token>"
+
+# Delete refused user
+curl -X DELETE http://localhost:8081/api/v1/employee/users/registrations/{userId} \
+  -H "Authorization: Bearer <employee-token>"
 ```
 
 ### Account list per user (employee)
 
 ```bash
 curl -X GET http://localhost:8081/api/v1/employee/accounts/user/{userId} \
-  -H "Authorization: Bearer <admin-token>"
+  -H "Authorization: Bearer <employee-token>"
 ```
 
 ### Freeze account (employee)
 
 ```bash
 curl -X PUT http://localhost:8081/api/v1/employee/accounts/{accountNumber}/freeze \
-  -H "Authorization: Bearer <admin-token>"
+  -H "Authorization: Bearer <employee-token>"
 ```
 
 ### Admin dashboard
 
 ```bash
 curl -X GET http://localhost:8081/api/v1/admin/dashboard \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+### Suspend employee (admin)
+
+```bash
+curl -X PUT http://localhost:8081/api/v1/admin/employees/{id}/suspend \
   -H "Authorization: Bearer <admin-token>"
 ```
 
