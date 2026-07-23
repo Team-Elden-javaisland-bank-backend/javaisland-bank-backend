@@ -58,6 +58,23 @@ public class EmployeeUserController {
         return ResponseEntity.ok("Registrazione rifiutata.");
     }
 
+    @GetMapping("/registrations/refused")
+    public ResponseEntity<List<PendingRegistrationDto>> getRefusedRegistrations() {
+        return ResponseEntity.ok(userService.getAnnulledRegistrations());
+    }
+
+    @PutMapping("/registrations/{userId}/reopen")
+    public ResponseEntity<String> reopenRegistration(@PathVariable Long userId) {
+        userService.reopenRegistration(userId);
+        return ResponseEntity.ok("Registrazione riaperta.");
+    }
+
+    @DeleteMapping("/{userId}")
+    public ResponseEntity<String> deleteUser(@PathVariable Long userId) {
+        userService.deleteUserAndAccount(userId);
+        return ResponseEntity.ok("Utente e conto associato eliminati.");
+    }
+
     @GetMapping("/customers")
     public ResponseEntity<List<CustomerListItemDto>> getAllCustomersSortedByName() {
         return ResponseEntity.ok(userService.getAllCustomersSortedByName());

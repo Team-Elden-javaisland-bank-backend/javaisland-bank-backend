@@ -2,6 +2,7 @@ package com.javaisland.bank_backend.notification.controller;
 
 import com.javaisland.bank_backend.notification.dto.NotificationDto;
 import com.javaisland.bank_backend.notification.service.NotificationService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -21,9 +23,10 @@ public class NotificationController {
     private final UserRepository userRepository;
 
     @GetMapping
-    public ResponseEntity<List<NotificationDto>> getNotifications(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<List<NotificationDto>> getNotifications(@AuthenticationPrincipal Jwt jwt, HttpServletRequest request) {
         Long userId = getUserId(jwt);
-        return ResponseEntity.ok(notificationService.getNotifications(userId));
+        Locale locale = resolveLocale(request);
+        return ResponseEntity.ok(notificationService.getNotifications(userId, locale));
     }
 
     @GetMapping("/unread-count")
@@ -42,6 +45,18 @@ public class NotificationController {
     public ResponseEntity<Void> markAllAsRead(@AuthenticationPrincipal Jwt jwt) {
         notificationService.markAllAsRead(getUserId(jwt));
         return ResponseEntity.ok().build();
+    }
+
+    private Locale resolveLocale(HttpServletRequest request) {
+        String acceptLanguage = request.getHeader("Accept-Language");
+        if (acceptLanguage != null && !acceptLanguage.isBlank()) {
+            try {
+                return Locale.forLanguageTag(acceptLanguage.split(",")[0].trim());
+            } catch (Exception e) {
+                // fallback to Italian
+            }
+        }
+        return Locale.ITALIAN;
     }
 
     private Long getUserId(Jwt jwt) {

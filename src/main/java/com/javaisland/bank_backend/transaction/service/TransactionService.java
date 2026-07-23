@@ -105,7 +105,7 @@ public class TransactionService {
         Transaction saved = transactionRepository.save(tx);
 
         if (destination != null && source != null) {
-            notificationService.send(destination.getUser().getId(), "TRANSFER", "Ricevuto bonifico di €" + amount + " da " + source.getAccountNumber() + ".");
+            notificationService.send(destination.getUser().getId(), "TRANSFER", "Ricevuto bonifico di €" + amount + " da " + source.getAccountNumber() + ".", "NOTIF_TRANSFER_RECEIVED", "[\"" + amount + "\", \"" + source.getAccountNumber() + "\"]");
         }
 
         log.info("Transaction #{} type={} amount={} source={} dest={}",
@@ -121,7 +121,7 @@ public class TransactionService {
         Account account = getAccountOrThrow(request.getAccountNumber());
         assertOwnership(userId, account);
         transferFunds(null, account, request.getAmount(), "DEPOSIT", "COMPLETED", "Deposito");
-        notificationService.send(userId, "DEPOSIT", "Deposito di €" + request.getAmount() + " sul conto " + request.getAccountNumber() + " completato.");
+        notificationService.send(userId, "DEPOSIT", "Deposito di €" + request.getAmount() + " sul conto " + request.getAccountNumber() + " completato.", "NOTIF_DEPOSIT_COMPLETED", "[\"" + request.getAmount() + "\", \"" + request.getAccountNumber() + "\"]");
     }
 
     private static final BigDecimal MIN_WITHDRAWAL = new BigDecimal("10");
@@ -140,7 +140,7 @@ public class TransactionService {
         assertOwnership(userId, account);
         accountLimitService.validateWithdrawal(account, amount);
         transferFunds(account, null, amount, "WITHDRAWAL", "COMPLETED", "Prelievo");
-        notificationService.send(userId, "WITHDRAWAL", "Prelievo di €" + amount + " dal conto " + request.getAccountNumber() + " completato.");
+        notificationService.send(userId, "WITHDRAWAL", "Prelievo di €" + amount + " dal conto " + request.getAccountNumber() + " completato.", "NOTIF_WITHDRAWAL_COMPLETED", "[\"" + amount + "\", \"" + request.getAccountNumber() + "\"]");
     }
 
     @Transactional
@@ -170,7 +170,7 @@ public class TransactionService {
 
         if (isInstant) {
             Transaction tx = transferFunds(source, destination, request.getAmount(), typeName, "COMPLETED", description);
-            notificationService.send(userId, "TRANSFER", "Bonifico di €" + request.getAmount() + " a " + destination.getAccountNumber() + " completato.");
+            notificationService.send(userId, "TRANSFER", "Bonifico di €" + request.getAmount() + " a " + destination.getAccountNumber() + " completato.", "NOTIF_TRANSFER_COMPLETED", "[\"" + request.getAmount() + "\", \"" + destination.getAccountNumber() + "\"]");
             return mapToResponseDto(tx);
         }
 
@@ -198,7 +198,7 @@ public class TransactionService {
         tx.setScheduledDate(scheduledDate.atStartOfDay());
         Transaction saved = transactionRepository.save(tx);
 
-        notificationService.send(userId, "SCHEDULED_TRANSFER", "Bonifico programmato di €" + request.getAmount() + " a " + destination.getAccountNumber() + " per il " + scheduledDate + ".");
+        notificationService.send(userId, "SCHEDULED_TRANSFER", "Bonifico programmato di €" + request.getAmount() + " a " + destination.getAccountNumber() + " per il " + scheduledDate + ".", "NOTIF_SCHEDULED_TRANSFER_CREATED", "[\"" + request.getAmount() + "\", \"" + destination.getAccountNumber() + "\", \"" + scheduledDate + "\"]");
 
         log.info("Scheduled transaction #{} type={} amount={} source={} dest={} scheduledDate={}",
                 saved.getId(), typeName, request.getAmount(),
@@ -300,10 +300,10 @@ public class TransactionService {
                 transactionRepository.save(tx);
 
                 if (source != null) {
-                    notificationService.send(source.getUser().getId(), "TRANSFER", "Bonifico programmato di €" + tx.getAmount() + " eseguito verso " + destination.getAccountNumber() + ".");
+                    notificationService.send(source.getUser().getId(), "TRANSFER", "Bonifico programmato di €" + tx.getAmount() + " eseguito verso " + destination.getAccountNumber() + ".", "NOTIF_SCHEDULED_TRANSFER_EXECUTED", "[\"" + tx.getAmount() + "\", \"" + destination.getAccountNumber() + "\"]");
                 }
                 if (destination != null) {
-                    notificationService.send(destination.getUser().getId(), "TRANSFER", "Ricevuto bonifico di €" + tx.getAmount() + " da " + source.getAccountNumber() + ".");
+                    notificationService.send(destination.getUser().getId(), "TRANSFER", "Ricevuto bonifico di €" + tx.getAmount() + " da " + source.getAccountNumber() + ".", "NOTIF_TRANSFER_RECEIVED", "[\"" + tx.getAmount() + "\", \"" + source.getAccountNumber() + "\"]");
                 }
 
                 log.info("Scheduled transfer #{} executed successfully", tx.getId());
@@ -334,7 +334,7 @@ public class TransactionService {
         tx.setDescription(tx.getDescription() + " - Annullato dall'utente");
         transactionRepository.save(tx);
 
-        notificationService.send(userId, "TRANSFER", "Transazione #" + transactionId + " annullata.");
+        notificationService.send(userId, "TRANSFER", "Transazione #" + transactionId + " annullata.", "NOTIF_TRANSACTION_CANCELLED", "[\"" + transactionId + "\"]");
 
         log.info("Transaction #{} cancelled by user", transactionId);
     }

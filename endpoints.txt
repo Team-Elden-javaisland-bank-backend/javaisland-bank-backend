@@ -1,66 +1,131 @@
-// ENDPOINT API Javaisland Bank
-// Legenda: [C] = customer, [D] = employee/dipendente
+============================================
+        BANK BACKEND - ALL ENDPOINTS
+============================================
 
-// ======================================================================
-// PUBBLICI (no autenticazione)
-// ======================================================================
+--- AUTH ---
+GET    /api/v1/auth/register
+POST   /api/v1/auth/register
+POST   /api/v1/auth/keycloak-login
 
-POST   /api/v1/auth/register                              // Registrazione nuovo utente
-POST   /api/v1/auth/keycloak-login                        // Login, ritorna JWT
+--- ACCOUNT (Customer) ---
+GET    /api/v1/customer/accounts
+POST   /api/v1/customer/accounts/open
+POST   /api/v1/customer/accounts/closure-request
+GET    /api/v1/customer/accounts/last-active-check
+GET    /api/v1/customer/accounts/{accountNumber}
+GET    /api/v1/customer/accounts/{accountNumber}/holder-info
+GET    /api/v1/customer/accounts/{accountNumber}/monthly-summary
+GET    /api/v1/customer/accounts/{accountNumber}/limits
+PUT    /api/v1/customer/accounts/{accountNumber}/limits/{limitType}
+PUT    /api/v1/customer/accounts/limits-setup-complete
 
-// ======================================================================
-// CUSTOMER — /api/v1/customer  [C]
-// ======================================================================
+--- TRANSACTIONS (Customer) ---
+POST   /api/v1/customer/transactions/deposit
+POST   /api/v1/customer/transactions/withdraw
+POST   /api/v1/customer/transactions/transfer
+GET    /api/v1/customer/transactions/recent/{accountNumber}
+GET    /api/v1/customer/transactions/all
+DELETE /api/v1/customer/transactions/{transactionId}/cancel
 
-// --- Account ---
-GET    /api/v1/customer/accounts                           // Lista miei conti
-POST   /api/v1/customer/accounts/open                      // Apri conto aggiuntivo
-POST   /api/v1/customer/accounts/closure-request           // Richiedi chiusura conto
-GET    /api/v1/customer/accounts/{accountNumber}           // Dettaglio conto
+--- BENEFICIARIES (Customer) ---
+GET    /api/v1/customer/beneficiaries
+POST   /api/v1/customer/beneficiaries
+DELETE /api/v1/customer/beneficiaries/{id}
+GET    /api/v1/customer/beneficiaries/check
+PUT    /api/v1/customer/beneficiaries/{id}/rename
 
-// --- Transazioni ---
-POST   /api/v1/customer/transactions/deposit               // Versamento su proprio conto
-POST   /api/v1/customer/transactions/withdraw              // Prelievo da proprio conto
-POST   /api/v1/customer/transactions/transfer              // Bonifico verso altro conto
-GET    /api/v1/customer/transactions/recent/{accountNumber} // Ultime 10 transazioni
-GET    /api/v1/customer/transactions/all                   // Storico paginato con filtri data
+--- NOTIFICATIONS (Customer) ---
+GET    /api/v1/customer/notifications
+GET    /api/v1/customer/notifications/unread-count
+PUT    /api/v1/customer/notifications/{id}/read
+PUT    /api/v1/customer/notifications/read-all
 
-// --- Carte ---
-GET    /api/v1/customer/cards                              // Lista mie carte
-GET    /api/v1/customer/cards/{cardId}                     // Dettaglio carta
+--- CARDS (Customer) ---
+GET    /api/v1/customer/cards
+GET    /api/v1/customer/cards/{cardId}
+GET    /api/v1/customer/cards/{cardId}/sensitive
 
-// --- Beneficiari (rubrica) ---
-GET    /api/v1/customer/beneficiaries                      // Lista miei beneficiari
-POST   /api/v1/customer/beneficiaries                      // Salva nuovo beneficiario
-DELETE /api/v1/customer/beneficiaries/{id}                 // Rimuovi beneficiario
+--- PROFILE (Customer) ---
+GET    /api/v1/customer/profile
+POST   /api/v1/profile-picture
+DELETE /api/v1/profile-picture
 
-// ======================================================================
-// EMPLOYEE — /api/v1/employee  [D]
-// ======================================================================
+--- PASSWORD CHANGE (Customer) ---
+POST   /api/v1/customer/password-change
 
-// --- Account ---
-GET    /api/v1/employee/accounts                           // Lista tutti i conti
-GET    /api/v1/employee/accounts/user/{userId}             // Conti per utente
-GET    /api/v1/employee/accounts/{accountNumber}           // Dettaglio conto
-PUT    /api/v1/employee/accounts/{accountNumber}/activate   // Attiva conto
-PUT    /api/v1/employee/accounts/{accountNumber}/freeze     // Congela conto
-PUT    /api/v1/employee/accounts/{accountNumber}/closure/validate  // Valida chiusura
-PUT    /api/v1/employee/accounts/{accountNumber}/closure/reject    // Rifiuta chiusura
+--- LIMIT CHANGE REQUEST (Customer) ---
+POST   /api/v1/customer/limit-change
 
-// --- Utenti ---
-GET    /api/v1/employee/users/registrations/pending        // Registrazioni in attesa
-PUT    /api/v1/employee/users/registrations/{userId}/validate      // Valida registrazione
-PUT    /api/v1/employee/users/registrations/{userId}/reject        // Rifiuta registrazione
-GET    /api/v1/employee/users/customers                    // Lista clienti
+--- CUSTOMER REQUESTS ---
+GET    /api/v1/customer/requests
 
-// --- Carte ---
-GET    /api/v1/employee/cards                              // Lista tutte le carte
-GET    /api/v1/employee/cards/{cardId}                     // Dettaglio carta
-GET    /api/v1/employee/accounts/{accountNumber}/cards     // Carte per conto
+--- CARDS (Employee) ---
+GET    /api/v1/employee/cards
+GET    /api/v1/employee/cards/{cardId}
+GET    /api/v1/employee/cards/{cardId}/sensitive
+PUT    /api/v1/employee/cards/{cardId}/block
+PUT    /api/v1/employee/cards/{cardId}/unblock
+GET    /api/v1/employee/accounts/{accountNumber}/cards
 
-// ======================================================================
-// ADMIN / VARIE
-// ======================================================================
+--- ACCOUNTS (Employee) ---
+GET    /api/v1/employee/accounts
+GET    /api/v1/employee/accounts/user/{userId}
+PUT    /api/v1/employee/accounts/{accountNumber}/activate
+PUT    /api/v1/employee/accounts/{accountNumber}/reject
+PUT    /api/v1/employee/accounts/{accountNumber}/closure/validate
+PUT    /api/v1/employee/accounts/{accountNumber}/closure/reject
+PUT    /api/v1/employee/accounts/{accountNumber}/freeze
+PUT    /api/v1/employee/accounts/{accountNumber}/unfreeze
+GET    /api/v1/employee/accounts/{accountNumber}
+GET    /api/v1/employee/accounts/{accountNumber}/user-detail
+GET    /api/v1/employee/accounts/{accountNumber}/limits
+PUT    /api/v1/employee/accounts/{accountNumber}/limits/{limitType}
 
-PATCH  /api/cards/{cardId}/status          [D]            // Aggiorna stato carta
-GET    /api/users/export                                 // Esporta clienti su file
+--- USERS (Employee) ---
+GET    /api/v1/employee/users/registrations/pending
+PUT    /api/v1/employee/users/registrations/{userId}/validate
+PUT    /api/v1/employee/users/registrations/{userId}/reject
+GET    /api/v1/employee/users/customers
+GET    /api/v1/employee/users/{userId}/detail
+GET    /api/v1/employee/users/password-requests/pending
+PUT    /api/v1/employee/users/password-requests/{requestId}/approve
+PUT    /api/v1/employee/users/password-requests/{requestId}/reject
+GET    /api/v1/employee/users/limit-requests/pending
+PUT    /api/v1/employee/users/limit-requests/{requestId}/approve
+PUT    /api/v1/employee/users/limit-requests/{requestId}/reject
+GET    /api/v1/employee/users/all-requests
+
+--- ADMIN ACCOUNTS ---
+GET    /api/v1/admin/accounts
+GET    /api/v1/admin/accounts/{accountNumber}
+GET    /api/v1/admin/accounts/{accountNumber}/limits
+PUT    /api/v1/admin/accounts/{accountNumber}/limits/{limitType}
+
+--- ADMIN CUSTOMERS ---
+GET    /api/v1/admin/customers
+GET    /api/v1/admin/customers/{userId}
+
+--- ADMIN EMPLOYEES ---
+GET    /api/v1/admin/employees
+GET    /api/v1/admin/employees/{userId}
+POST   /api/v1/admin/employees
+PUT    /api/v1/admin/employees/{userId}/suspend
+PUT    /api/v1/admin/employees/{userId}/activate
+
+--- ADMIN TRANSACTIONS ---
+GET    /api/v1/admin/transactions
+
+--- ADMIN AUDIT LOGS ---
+GET    /api/v1/admin/audit-logs
+
+--- ADMIN DASHBOARD ---
+GET    /api/v1/admin/dashboard
+
+--- CARDS (Internal) ---
+PATCH  /api/cards/{cardId}/status
+
+--- COMUNI ---
+GET    /api/v1/comuni
+
+--- USER EXPORT ---
+GET    /api/users/export

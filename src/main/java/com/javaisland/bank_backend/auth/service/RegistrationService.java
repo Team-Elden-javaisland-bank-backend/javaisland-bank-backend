@@ -30,7 +30,7 @@ public class RegistrationService {
     private final RoleTypeRepository roleTypeRepository;
     private final UserStatusRepository userStatusRepository;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRED)
     public User createPendingUser(RegisterRequestDto request) {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new ApiBankException("Email già registrata.", "EMAIL_ALREADY_REGISTERED");
@@ -75,8 +75,18 @@ public class RegistrationService {
     }
 
 
+    @Transactional
     public UserResponseDto register(RegisterRequestDto request) {
         User user = createPendingUser(request);
+
+        try {
+            accountService.createInitialAccountForUser(user);
+        } catch (Exception e) {
+            log.error("Account creation failed during registration for user id={}: {}", user.getId(), e.getMessage(), e);
+            throw new ApiBankException(
+                    "Registrazione fallita: impossibile creare il conto. Riprova.",
+                    "ACCOUNT_CREATION_FAILED");
+        }
 
         return UserResponseDto.builder()
                 .id(user.getId())

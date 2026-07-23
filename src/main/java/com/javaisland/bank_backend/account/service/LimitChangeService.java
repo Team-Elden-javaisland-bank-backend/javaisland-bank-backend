@@ -85,7 +85,7 @@ public class LimitChangeService {
                 .build());
 
         notificationService.send(userId, "LIMIT_CHANGE",
-                "Richiesta di modifica limite " + request.getLimitType() + " inviata. In attesa di approvazione.");
+                "Richiesta di modifica limite " + request.getLimitType() + " inviata. In attesa di approvazione.", "NOTIF_LIMIT_CHANGE_REQUESTED", "[\"" + request.getLimitType() + "\"]");
 
         log.info("Limit change request created for user id={}, limit={}", userId, request.getLimitType());
     }
@@ -132,7 +132,7 @@ public class LimitChangeService {
         limitChangeRequestRepository.save(request);
 
         notificationService.send(request.getUserId(), "LIMIT_CHANGE",
-                "La tua richiesta di modifica limite " + request.getLimitTypeName() + " e stata approvata.");
+                "La tua richiesta di modifica limite " + request.getLimitTypeName() + " e stata approvata.", "NOTIF_LIMIT_CHANGE_APPROVED", "[\"" + request.getLimitTypeName() + "\"]");
 
         log.info("Limit change request id={} approved", requestId);
     }
@@ -151,7 +151,7 @@ public class LimitChangeService {
         limitChangeRequestRepository.save(request);
 
         notificationService.send(request.getUserId(), "LIMIT_CHANGE",
-                "La tua richiesta di modifica limite " + request.getLimitTypeName() + " e stata rifiutata.");
+                "La tua richiesta di modifica limite " + request.getLimitTypeName() + " e stata rifiutata.", "NOTIF_LIMIT_CHANGE_REJECTED", "[\"" + request.getLimitTypeName() + "\"]");
 
         log.info("Limit change request id={} rejected", requestId);
     }

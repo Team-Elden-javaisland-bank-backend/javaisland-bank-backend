@@ -48,7 +48,7 @@ public class AccountService {
     private final AuditLogService auditLogService;
     private final NotificationService notificationService;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRED)
     public Account createInitialAccountForUser(User user) {
         User managedUser = userRepository.findById(user.getId())
                 .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
@@ -108,7 +108,7 @@ public class AccountService {
         cardService.activateCardsByAccountId(account.getId());
         auditLogService.log("ACCOUNT", account.getId(), "ACTIVATE", "system",
                 "Conto attivato: " + accountNumber);
-        notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato attivato.");
+        notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato attivato.", "NOTIF_ACCOUNT_ACTIVATED", "[\"" + accountNumber + "\"]");
         log.info("Account {} activated by employee, card issued and activated", accountNumber);
     }
 
@@ -131,7 +131,7 @@ public class AccountService {
         cardService.deleteCardsByAccountId(account.getId());
         auditLogService.log("ACCOUNT", account.getId(), "REJECT", "system",
                 "Richiesta conto rifiutata: " + accountNumber);
-        notificationService.send(account.getUser().getId(), "ACCOUNT", "La richiesta di apertura conto " + accountNumber + " è stata rifiutata.");
+        notificationService.send(account.getUser().getId(), "ACCOUNT", "La richiesta di apertura conto " + accountNumber + " è stata rifiutata.", "NOTIF_ACCOUNT_REJECTED", "[\"" + accountNumber + "\"]");
         log.info("Account {} request rejected by employee — CLOSED, cards deleted", accountNumber);
     }
 
@@ -161,7 +161,7 @@ public class AccountService {
         account.setStatusId(AccountStatus.FROZEN);
         account.setClosureRequestedAt(LocalDateTime.now());
         accountRepository.save(account);
-        notificationService.send(userId, "ACCOUNT", "Richiesta di chiusura conto " + accountNumber + " inviata. In attesa di approvazione.");
+        notificationService.send(userId, "ACCOUNT", "Richiesta di chiusura conto " + accountNumber + " inviata. In attesa di approvazione.", "NOTIF_CLOSURE_REQUESTED", "[\"" + accountNumber + "\"]");
         log.info("Closure requested by user id={} for account {}", user.getId(), accountNumber);
     }
 
@@ -175,7 +175,7 @@ public class AccountService {
         account.setClosureRequestedAt(null);
         account.setClosureRejectedAt(LocalDateTime.now());
         accountRepository.save(account);
-        notificationService.send(account.getUser().getId(), "ACCOUNT", "La richiesta di chiusura del conto " + accountNumber + " è stata rifiutata.");
+        notificationService.send(account.getUser().getId(), "ACCOUNT", "La richiesta di chiusura del conto " + accountNumber + " è stata rifiutata.", "NOTIF_CLOSURE_REJECTED", "[\"" + accountNumber + "\"]");
         log.info("Closure request rejected for account {} by employee — back to ACTIVE", accountNumber);
     }
 
@@ -189,7 +189,7 @@ public class AccountService {
         accountRepository.save(account);
         auditLogService.log("ACCOUNT", account.getId(), "FREEZE", "system",
                 "Conto congelato: " + accountNumber);
-        notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato congelato da un impiegato.");
+        notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato congelato da un impiegato.", "NOTIF_ACCOUNT_FROZEN", "[\"" + accountNumber + "\"]");
         log.info("Account {} frozen by employee", accountNumber);
     }
 
@@ -210,10 +210,10 @@ public class AccountService {
                 "Conto scongelato: " + accountNumber);
         if (hadClosureRequest) {
             notificationService.send(account.getUser().getId(), "ACCOUNT",
-                    "La richiesta di chiusura del conto " + accountNumber + " è stata rifiutata. Il conto è stato riattivato.");
+                    "La richiesta di chiusura del conto " + accountNumber + " è stata rifiutata. Il conto è stato riattivato.", "NOTIF_CLOSURE_REJECTED_UNFREEZE", "[\"" + accountNumber + "\"]");
         } else {
             notificationService.send(account.getUser().getId(), "ACCOUNT",
-                    "Il tuo conto " + accountNumber + " è stato sbloccato.");
+                    "Il tuo conto " + accountNumber + " è stato sbloccato.", "NOTIF_ACCOUNT_UNFROZEN", "[\"" + accountNumber + "\"]");
         }
         log.info("Account {} unfrozen by employee", accountNumber);
     }
@@ -231,7 +231,7 @@ public class AccountService {
         account.setClosedAt(LocalDateTime.now());
         account.setClosureRequestedAt(null);
         accountRepository.save(account);
-        notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato chiuso.");
+        notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato chiuso.", "NOTIF_ACCOUNT_CLOSED", "[\"" + accountNumber + "\"]");
         log.info("Account {} closed by employee", accountNumber);
     }
 
@@ -254,36 +254,33 @@ public class AccountService {
                     "Hai già un conto in attesa di approvazione. Può richiedere un nuovo conto solo dopo che quello corrente viene accettato.", "PENDING_ACCOUNT_EXISTS");
         }
 
+        Account sourceAccount = accountRepository.findByAccountNumber(request.getSourceAccountNumber())
+                .orElseThrow(() -> new ApiBankException("Conto sorgente non trovato.", "ACCOUNT_NOT_FOUND"));
+        assertOwnership(sourceAccount, user);
+
+        if (sourceAccount.getStatusId() != AccountStatus.ACTIVE) {
+            throw new ApiBankException("Il conto sorgente " + sourceAccount.getAccountNumber() + " non è attivo.", "INVALID_ACCOUNT_STATE");
+        }
+
+        if (request.getInitialAmount() == null || request.getInitialAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ApiBankException("L'importo iniziale deve essere maggiore di 0.", "INVALID_AMOUNT");
+        }
+
+        if (sourceAccount.getBalance().compareTo(request.getInitialAmount()) < 0) {
+            throw new ApiBankException("Fondi insufficienti sul conto sorgente " + sourceAccount.getAccountNumber() + ".", "INSUFFICIENT_FUNDS");
+        }
+
         Account newAccount = new Account();
         newAccount.setAccountNumber(generateUniqueAccountNumber());
         newAccount.setBalance(BigDecimal.ZERO);
         newAccount.setStatusId(AccountStatus.INACTIVE);
         newAccount.setUser(user);
-
-        if (request.getSourceAccountNumber() != null && !request.getSourceAccountNumber().isBlank()) {
-            Account sourceAccount = accountRepository.findByAccountNumber(request.getSourceAccountNumber())
-                    .orElseThrow(() -> new ApiBankException("Conto sorgente non trovato.", "ACCOUNT_NOT_FOUND"));
-            assertOwnership(sourceAccount, user);
-
-            if (sourceAccount.getStatusId() != AccountStatus.ACTIVE) {
-                throw new ApiBankException("Il conto sorgente " + sourceAccount.getAccountNumber() + " non è attivo.", "INVALID_ACCOUNT_STATE");
-            }
-
-            if (request.getInitialAmount() == null || request.getInitialAmount().compareTo(BigDecimal.ONE) < 0) {
-                throw new ApiBankException("L'importo minimo da trasferire è 1 euro.", "INVALID_AMOUNT");
-            }
-
-            if (sourceAccount.getBalance().compareTo(request.getInitialAmount()) < 0) {
-                throw new ApiBankException("Fondi insufficienti sul conto sorgente " + sourceAccount.getAccountNumber() + ".", "INSUFFICIENT_FUNDS");
-            }
-
-            newAccount.setSourceAccountNumber(request.getSourceAccountNumber());
-            newAccount.setInitialAmount(request.getInitialAmount());
-        }
+        newAccount.setSourceAccountNumber(request.getSourceAccountNumber());
+        newAccount.setInitialAmount(request.getInitialAmount());
 
         newAccount = accountRepository.save(newAccount);
 
-        notificationService.send(userId, "ACCOUNT", "Richiesta di apertura conto " + newAccount.getAccountNumber() + " inviata. In attesa di approvazione.");
+        notificationService.send(userId, "ACCOUNT", "Richiesta di apertura conto " + newAccount.getAccountNumber() + " inviata. In attesa di approvazione.", "NOTIF_ACCOUNT_OPEN_REQUESTED", "[\"" + newAccount.getAccountNumber() + "\"]");
 
         log.info("User id={} opened additional account {} (INACTIVE), source={}, amount={}", user.getId(), newAccount.getAccountNumber(), request.getSourceAccountNumber(), request.getInitialAmount());
         return newAccount;

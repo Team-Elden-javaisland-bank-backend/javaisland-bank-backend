@@ -98,7 +98,7 @@ public class CardService {
         Card saved = cardRepository.save(card);
         if ("BLOCKED".equals(newStatusName)) {
             accountRepository.findById(card.getAccountId()).ifPresent(account ->
-                notificationService.send(account.getUser().getId(), "CARD", "La carta terminata in " + card.getCardNumber().substring(12) + " è stata bloccata.")
+                notificationService.send(account.getUser().getId(), "CARD", "La carta terminata in " + card.getCardNumber().substring(12) + " è stata bloccata.", "NOTIF_CARD_BLOCKED", "[\"" + card.getCardNumber().substring(12) + "\"]")
             );
         }
         return saved;
@@ -115,7 +115,7 @@ public class CardService {
         card.setStatus(activeStatus);
         Card saved = cardRepository.save(card);
         accountRepository.findById(card.getAccountId()).ifPresent(account ->
-            notificationService.send(account.getUser().getId(), "CARD", "La carta " + card.getCardNumber().substring(12) + " è stata sbloccata.")
+            notificationService.send(account.getUser().getId(), "CARD", "La carta " + card.getCardNumber().substring(12) + " è stata sbloccata.", "NOTIF_CARD_UNBLOCKED", "[\"" + card.getCardNumber().substring(12) + "\"]")
         );
         return saved;
     }

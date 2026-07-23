@@ -11,6 +11,12 @@ spring:
     password: ${DB_PASSWORD:bank_password}
     driver-class-name: org.postgresql.Driver
 
+  messages:
+    basename: messages
+    encoding: UTF-8
+  mvc:
+    locale-resolver: accept-header
+
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:

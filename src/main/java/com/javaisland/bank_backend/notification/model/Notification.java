@@ -23,6 +23,12 @@ public class Notification {
     @Column(nullable = false, length = 500)
     private String message;
 
+    @Column(name = "message_key", length = 100)
+    private String messageKey;
+
+    @Column(name = "message_params", length = 500)
+    private String messageParams;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean read = false;

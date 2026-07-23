@@ -66,7 +66,7 @@ public class PasswordChangeService {
                 .build();
 
         passwordChangeRequestRepository.save(changeRequest);
-        notificationService.send(userId, "PASSWORD_CHANGE", "Richiesta di cambio password inviata. In attesa di approvazione.");
+        notificationService.send(userId, "PASSWORD_CHANGE", "Richiesta di cambio password inviata. In attesa di approvazione.", "NOTIF_PWD_CHANGE_REQUESTED", null);
         log.info("Password change request created for user id={}", userId);
     }
 
@@ -114,7 +114,7 @@ public class PasswordChangeService {
         request.setProcessedAt(LocalDateTime.now(ZoneId.of("Europe/Rome")));
         passwordChangeRequestRepository.save(request);
 
-        notificationService.send(user.getId(), "PASSWORD_CHANGE", "La tua richiesta di cambio password è stata approvata.");
+        notificationService.send(user.getId(), "PASSWORD_CHANGE", "La tua richiesta di cambio password è stata approvata.", "NOTIF_PWD_CHANGE_APPROVED", null);
 
         log.info("Password change request id={} approved for user id={}", requestId, user.getId());
     }
@@ -132,7 +132,7 @@ public class PasswordChangeService {
         request.setProcessedAt(LocalDateTime.now(ZoneId.of("Europe/Rome")));
         passwordChangeRequestRepository.save(request);
 
-        notificationService.send(request.getUserId(), "PASSWORD_CHANGE", "La tua richiesta di cambio password è stata rifiutata.");
+        notificationService.send(request.getUserId(), "PASSWORD_CHANGE", "La tua richiesta di cambio password è stata rifiutata.", "NOTIF_PWD_CHANGE_REJECTED", null);
 
         log.info("Password change request id={} rejected for user id={}", requestId, request.getUserId());
     }

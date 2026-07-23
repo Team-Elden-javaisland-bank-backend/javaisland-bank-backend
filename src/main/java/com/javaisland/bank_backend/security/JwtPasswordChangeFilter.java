@@ -39,9 +39,20 @@ public class JwtPasswordChangeFilter extends OncePerRequestFilter {
             Instant tokenIssuedAt = jwtAuth.getToken().getIssuedAt();
 
             if (keycloakId != null && tokenIssuedAt != null) {
-                Optional<User> userOpt = userRepository.findByKeycloakId(keycloakId);
+                Optional<User> userOpt = userRepository.findByKeycloakIdWithStatus(keycloakId);
                 if (userOpt.isPresent()) {
                     User user = userOpt.get();
+
+                    String statusName = user.getStatus() != null ? user.getStatus().getUserStatus() : null;
+                    if (statusName != null && !"ACTIVE".equals(statusName)) {
+                        log.warn("Rejected request for suspended/annulled user id={}, status={}", user.getId(), statusName);
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                        response.getWriter().write(objectMapper.writeValueAsString(
+                                Map.of("message", "Account non attivo. Contatta il supporto.", "code", "ACCOUNT_" + statusName)));
+                        return;
+                    }
+
                     if (user.getPasswordChangedAt() != null
                             && tokenIssuedAt.isBefore(user.getPasswordChangedAt().atZone(ZoneId.of("Europe/Rome")).toInstant())) {
                         log.warn("Rejected token for user id={}: token issued at {} but password changed at {}",

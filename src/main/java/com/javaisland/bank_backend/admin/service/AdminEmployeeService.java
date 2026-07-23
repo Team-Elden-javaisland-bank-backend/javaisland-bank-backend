@@ -138,6 +138,7 @@ public class AdminEmployeeService {
         userRepository.save(user);
 
         if (user.getKeycloakId() != null) {
+            keycloakAdminService.logoutUser(user.getKeycloakId());
             keycloakAdminService.setUserEnabled(user.getKeycloakId(), false);
         }
 
