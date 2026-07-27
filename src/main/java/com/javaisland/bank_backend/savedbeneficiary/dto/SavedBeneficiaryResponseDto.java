@@ -13,4 +13,5 @@ public class SavedBeneficiaryResponseDto {
     private Integer id;
     private String beneficiaryName;
     private String accountNumber;
+    private String profilePictureUrl;
 }

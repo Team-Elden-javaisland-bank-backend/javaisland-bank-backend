@@ -13,5 +13,6 @@ public record EmployeeDetailDto(
     String email,
     LocalDate birthDate,
     String status,
+    String profilePictureUrl,
     LocalDateTime createdAt
 ) {}

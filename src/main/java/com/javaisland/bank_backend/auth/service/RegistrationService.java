@@ -1,24 +1,18 @@
 package com.javaisland.bank_backend.auth.service;
 
-import com.javaisland.bank_backend.account.model.Account;
 import com.javaisland.bank_backend.account.service.AccountService;
 import com.javaisland.bank_backend.auth.dto.RegisterRequestDto;
 import com.javaisland.bank_backend.exception.ApiBankException;
-import com.javaisland.bank_backend.user.model.RoleType;
 import com.javaisland.bank_backend.user.repository.RoleTypeRepository;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import com.javaisland.bank_backend.user.dto.UserResponseDto;
-import com.javaisland.bank_backend.user.model.UserStatus;
 import com.javaisland.bank_backend.user.repository.UserStatusRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +23,7 @@ public class RegistrationService {
     private final AccountService accountService;
     private final RoleTypeRepository roleTypeRepository;
     private final UserStatusRepository userStatusRepository;
+    private final KeycloakAdminService keycloakAdminService;
 
     @Transactional(propagation = Propagation.REQUIRED)
     public User createPendingUser(RegisterRequestDto request) {
@@ -42,15 +37,29 @@ public class RegistrationService {
                 .orElseThrow(() -> new ApiBankException("Ruolo C non configurato."));
         var pendingStatus = userStatusRepository.findByUserStatus("PENDING")
                 .orElseThrow(() -> new ApiBankException("Stato PENDING non configurato."));
+
+        String keycloakId;
+        try {
+            keycloakId = keycloakAdminService.createUser(
+                    request.getEmail(),
+                    request.getPassword(),
+                    request.getEmail(),
+                    request.getFirstName(),
+                    request.getLastName(),
+                    false);
+        } catch (ApiBankException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ApiBankException("Creazione utente Keycloak fallita.", "KEYCLOAK_CREATION_FAILED");
+        }
+
         User user = new User();
+        user.setKeycloakId(keycloakId);
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
         user.setBirthDate(request.getBirthDate());
         user.setEmail(request.getEmail());
         user.setUsername(request.getEmail());
-        user.setPassword(hashPassword(request.getPassword()));
-        user.setKeycloakId(null);
-        user.setPlainPassword(request.getPassword());
         user.setRoleType(customerRole);
         user.setStatus(pendingStatus);
         user.setProfession(request.getProfession());
@@ -68,12 +77,14 @@ public class RegistrationService {
         var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
                 .orElseThrow(() -> new ApiBankException("Stato ANNULLED non configurato."));
         userRepository.findById(userId).ifPresent(u -> {
+            if (u.getKeycloakId() != null) {
+                keycloakAdminService.deleteUser(u.getKeycloakId());
+            }
             u.setStatus(annulledStatus);
             userRepository.save(u);
             log.warn("User id={} ANNULLED because the associated account could not be created", userId);
         });
     }
-
 
     @Transactional
     public UserResponseDto register(RegisterRequestDto request) {
@@ -101,6 +112,7 @@ public class RegistrationService {
                 .fiscalCode(user.getFiscalCode())
                 .phone(user.getPhone())
                 .residence(user.getResidence())
+                .profilePictureUrl(user.getProfilePictureUrl())
                 .build();
     }
 
@@ -115,26 +127,14 @@ public class RegistrationService {
             throw new ApiBankException("La registrazione non è in stato PENDING.", "INVALID_STATE");
         }
 
+        if (user.getKeycloakId() != null) {
+            keycloakAdminService.deleteUser(user.getKeycloakId());
+        }
+
         var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
                 .orElseThrow(() -> new ApiBankException("Stato ANNULLED non configurato."));
         user.setStatus(annulledStatus);
         userRepository.save(user);
         log.info("Registration cancelled for user id={}", userId);
-    }
-
-    public static String hashPassword(String password) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(password.getBytes());
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hash) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 not available", e);
-        }
     }
 }

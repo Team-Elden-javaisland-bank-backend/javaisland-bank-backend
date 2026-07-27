@@ -165,7 +165,6 @@ public class DataInitializer implements CommandLineRunner {
                 .orElseThrow(() -> new RuntimeException("Ruolo D non trovato"));
         var activeStatus = userStatusRepository.findByUserStatus("ACTIVE")
                 .orElseThrow(() -> new RuntimeException("Stato ACTIVE non trovato"));
-        String hashedPass = RegistrationService.hashPassword("password123");
 
         User customer1 = new User();
         customer1.setFirstName("Mario");
@@ -173,7 +172,6 @@ public class DataInitializer implements CommandLineRunner {
         customer1.setBirthDate(java.time.LocalDate.of(1985, 3, 15));
         customer1.setEmail("mario.rossi@example.com");
         customer1.setUsername("mario.rossi@example.com");
-        customer1.setPassword(hashedPass);
         customer1.setRoleType(roleC);
         customer1.setStatus(activeStatus);
         customer1 = userRepository.save(customer1);
@@ -190,7 +188,6 @@ public class DataInitializer implements CommandLineRunner {
         customer2.setBirthDate(java.time.LocalDate.of(1990, 7, 22));
         customer2.setEmail("laura.bianchi@example.com");
         customer2.setUsername("laura.bianchi@example.com");
-        customer2.setPassword(hashedPass);
         customer2.setRoleType(roleC);
         customer2.setStatus(activeStatus);
         customer2 = userRepository.save(customer2);
@@ -213,7 +210,6 @@ public class DataInitializer implements CommandLineRunner {
         employee.setBirthDate(java.time.LocalDate.of(1980, 1, 1));
         employee.setEmail("admin@javaisland.com");
         employee.setUsername("admin");
-        employee.setPassword(hashedPass);
         employee.setRoleType(roleD);
         employee.setStatus(activeStatus);
         userRepository.save(employee);

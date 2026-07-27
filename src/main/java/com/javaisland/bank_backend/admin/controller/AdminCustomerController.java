@@ -3,12 +3,16 @@ package com.javaisland.bank_backend.admin.controller;
 import com.javaisland.bank_backend.account.dto.AccountResponseDto;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.account.model.Account;
+import com.javaisland.bank_backend.auth.service.KeycloakAdminService;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.model.RoleType;
+import com.javaisland.bank_backend.user.model.UserStatus;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import com.javaisland.bank_backend.user.repository.RoleTypeRepository;
+import com.javaisland.bank_backend.user.repository.UserStatusRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -17,16 +21,20 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/admin/customers")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('A')")
+@Slf4j
 public class AdminCustomerController {
 
     private final UserRepository userRepository;
     private final RoleTypeRepository roleTypeRepository;
     private final AccountRepository accountRepository;
+    private final KeycloakAdminService keycloakAdminService;
+    private final UserStatusRepository userStatusRepository;
 
     @Data
     public static class AdminCustomerListItemDto {
@@ -36,6 +44,7 @@ public class AdminCustomerController {
         private String email;
         private String username;
         private String status;
+        private String profilePictureUrl;
         private int accountCount;
         private BigDecimal totalBalance;
         private LocalDateTime createdAt;
@@ -57,6 +66,7 @@ public class AdminCustomerController {
         private String birthProvince;
         private String profession;
         private String status;
+        private String profilePictureUrl;
         private LocalDateTime createdAt;
         private List<AccountResponseDto> accounts;
     }
@@ -75,6 +85,7 @@ public class AdminCustomerController {
                     dto.setEmail(user.getEmail());
                     dto.setUsername(user.getUsername());
                     dto.setStatus(user.getStatus().getUserStatus());
+                    dto.setProfilePictureUrl(user.getProfilePictureUrl());
                     dto.setCreatedAt(user.getCreatedAt());
 
                     List<Account> accounts = accountRepository.findByUserId(user.getId());
@@ -109,6 +120,7 @@ public class AdminCustomerController {
         dto.setBirthProvince(user.getBirthProvince());
         dto.setProfession(user.getProfession());
         dto.setStatus(user.getStatus().getUserStatus());
+        dto.setProfilePictureUrl(user.getProfilePictureUrl());
         dto.setCreatedAt(user.getCreatedAt());
 
         List<AccountResponseDto> accounts = accountRepository.findByUserId(user.getId())
@@ -119,6 +131,7 @@ public class AdminCustomerController {
                         .profileId(user.getId())
                         .profileFirstName(user.getFirstName())
                         .profileLastName(user.getLastName())
+                        .profilePictureUrl(user.getProfilePictureUrl())
                         .userStatusId(user.getStatus().getId())
                         .initialAmount(a.getInitialAmount())
                         .createdAt(a.getCreatedAt())
@@ -127,5 +140,53 @@ public class AdminCustomerController {
         dto.setAccounts(accounts);
 
         return ResponseEntity.ok(dto);
+    }
+
+    @PostMapping("/sync-keycloak")
+    public ResponseEntity<Map<String, Object>> syncKeycloakUsers() {
+        var kcUsers = keycloakAdminService.getAllUsers();
+        var customerRole = roleTypeRepository.findByRoleName("C")
+                .orElseThrow(() -> new RuntimeException("Role C not configured"));
+        var activeStatus = userStatusRepository.findByUserStatus("ACTIVE")
+                .orElseThrow(() -> new RuntimeException("Status ACTIVE not configured"));
+
+        int synced = 0;
+        for (Map<String, Object> kcUser : kcUsers) {
+            String keycloakId = (String) kcUser.get("id");
+            String username = (String) kcUser.get("username");
+
+            if (userRepository.findByKeycloakId(keycloakId).isPresent()) {
+                continue;
+            }
+            if (userRepository.findByUsername(username).isPresent()) {
+                User existing = userRepository.findByUsername(username).get();
+                existing.setKeycloakId(keycloakId);
+                userRepository.save(existing);
+                synced++;
+                log.info("Linked existing DB user '{}' to Keycloak id={}", username, keycloakId);
+                continue;
+            }
+
+            String firstName = (String) kcUser.getOrDefault("firstName", "");
+            String lastName = (String) kcUser.getOrDefault("lastName", "");
+            String email = (String) kcUser.getOrDefault("email", username);
+
+            User user = new User();
+            user.setKeycloakId(keycloakId);
+            user.setUsername(username);
+            user.setFirstName(firstName);
+            user.setLastName(lastName);
+            user.setEmail(email);
+            user.setRoleType(customerRole);
+            user.setStatus(activeStatus);
+            userRepository.save(user);
+            synced++;
+            log.info("Synced Keycloak user to DB: {} (keycloakId={})", username, keycloakId);
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "keycloakUsers", kcUsers.size(),
+                "synced", synced
+        ));
     }
 }

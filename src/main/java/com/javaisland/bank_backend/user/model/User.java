@@ -39,9 +39,8 @@ public class User {
     @Column(name = "last_name", nullable = false, length = 100)
     private String lastName;
 
-    @NotNull(message = "La data di nascita è obbligatoria")
     @Past(message = "La data di nascita deve essere una data passata")
-    @Column(name = "birth_date", nullable = false)
+    @Column(name = "birth_date")
     private LocalDate birthDate;
 
     @NotBlank(message = "L'email è obbligatoria")
@@ -49,12 +48,6 @@ public class User {
     @Size(max = 150, message = "L'email non può superare i 150 caratteri")
     @Column(unique = true, nullable = false, length = 150)
     private String email;
-
-    @Column(length = 64)
-    private String password;
-
-    @Column(name = "plain_password", length = 100)
-    private String plainPassword;
 
     @Size(max = 20, message = "Il codice filiale non può superare i 20 caratteri")
     @Column(name = "branch_code", length = 20)

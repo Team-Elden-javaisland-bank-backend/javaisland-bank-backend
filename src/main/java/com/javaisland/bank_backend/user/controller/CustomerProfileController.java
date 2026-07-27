@@ -78,6 +78,7 @@ public class CustomerProfileController {
                 .residence(user.getResidence())
                 .birthPlace(user.getBirthPlace())
                 .birthProvince(user.getBirthProvince())
+                .profilePictureUrl(user.getProfilePictureUrl())
                 .userStatus(user.getStatus().getUserStatus())
                 .registeredAt(user.getCreatedAt())
                 .totalAccounts(totalAccounts)

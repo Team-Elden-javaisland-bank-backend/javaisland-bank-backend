@@ -88,11 +88,20 @@ public class BeneficiaryService {
     }
 
     private BeneficiaryResponseDto mapToDto(Beneficiary b) {
-        return BeneficiaryResponseDto.builder()
+        var builder = BeneficiaryResponseDto.builder()
                 .id(b.getId())
                 .nickname(b.getNickname())
                 .destinationAccountNumber(b.getDestinationAccountNumber())
-                .createdAt(b.getCreatedAt())
-                .build();
+                .createdAt(b.getCreatedAt());
+
+        accountRepository.findByAccountNumber(b.getDestinationAccountNumber())
+                .ifPresent(account -> {
+                    var holder = account.getUser();
+                    builder.holderFirstName(holder.getFirstName())
+                            .holderLastName(holder.getLastName())
+                            .profilePictureUrl(holder.getProfilePictureUrl());
+                });
+
+        return builder.build();
     }
 }

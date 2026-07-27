@@ -39,6 +39,7 @@ public class AdminEmployeeService {
                         .lastName(u.getLastName())
                         .email(u.getEmail())
                         .status(u.getStatus().getUserStatus())
+                        .profilePictureUrl(u.getProfilePictureUrl())
                         .createdAt(u.getCreatedAt())
                         .build())
                 .toList();
@@ -55,6 +56,7 @@ public class AdminEmployeeService {
                 .email(user.getEmail())
                 .birthDate(user.getBirthDate())
                 .status(user.getStatus().getUserStatus())
+                .profilePictureUrl(user.getProfilePictureUrl())
                 .createdAt(user.getCreatedAt())
                 .build();
     }
@@ -117,6 +119,7 @@ public class AdminEmployeeService {
                 .lastName(user.getLastName())
                 .email(user.getEmail())
                 .status(user.getStatus().getUserStatus())
+                .profilePictureUrl(user.getProfilePictureUrl())
                 .createdAt(user.getCreatedAt())
                 .build();
     }

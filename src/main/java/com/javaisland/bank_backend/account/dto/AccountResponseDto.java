@@ -18,6 +18,7 @@ public class AccountResponseDto {
     private Long profileId;
     private String profileFirstName;
     private String profileLastName;
+    private String profilePictureUrl;
     private Integer userStatusId;
     private BigDecimal initialAmount;
     private LocalDateTime createdAt;

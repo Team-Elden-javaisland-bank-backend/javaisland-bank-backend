@@ -1,5 +1,6 @@
 package com.javaisland.bank_backend.savedbeneficiary.service;
 
+import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.savedbeneficiary.dto.SavedBeneficiaryRequestDto;
 import com.javaisland.bank_backend.savedbeneficiary.dto.SavedBeneficiaryResponseDto;
@@ -21,6 +22,7 @@ public class SavedBeneficiaryService {
 
     private final SavedBeneficiaryRepository savedBeneficiaryRepository;
     private final UserRepository userRepository;
+    private final AccountRepository accountRepository;
 
     @Transactional
     public SavedBeneficiaryResponseDto save(Long userId, SavedBeneficiaryRequestDto request) {
@@ -39,6 +41,7 @@ public class SavedBeneficiaryService {
                 .id(saved.getId())
                 .beneficiaryName(saved.getBeneficiaryName())
                 .accountNumber(saved.getAccountNumber())
+                .profilePictureUrl(resolveProfilePicture(saved.getAccountNumber()))
                 .build();
     }
 
@@ -49,6 +52,7 @@ public class SavedBeneficiaryService {
                         .id(sb.getId())
                         .beneficiaryName(sb.getBeneficiaryName())
                         .accountNumber(sb.getAccountNumber())
+                        .profilePictureUrl(resolveProfilePicture(sb.getAccountNumber()))
                         .build())
                 .toList();
     }
@@ -62,5 +66,11 @@ public class SavedBeneficiaryService {
         }
         savedBeneficiaryRepository.delete(sb);
         log.info("Deleted saved beneficiary id={} for user id={}", id, userId);
+    }
+
+    private String resolveProfilePicture(String accountNumber) {
+        return accountRepository.findByAccountNumber(accountNumber)
+                .map(a -> a.getUser().getProfilePictureUrl())
+                .orElse(null);
     }
 }

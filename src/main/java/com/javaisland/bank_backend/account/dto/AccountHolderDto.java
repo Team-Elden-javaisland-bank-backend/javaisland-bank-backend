@@ -13,4 +13,5 @@ public class AccountHolderDto {
     private String firstName;
     private String lastName;
     private String accountNumber;
+    private String profilePictureUrl;
 }

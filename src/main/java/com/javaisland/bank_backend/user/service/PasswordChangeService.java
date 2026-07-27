@@ -33,16 +33,6 @@ public class PasswordChangeService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
 
-        String hashedCurrentPassword = RegistrationService.hashPassword(request.getCurrentPassword());
-        if (!hashedCurrentPassword.equals(user.getPassword())) {
-            throw new ApiBankException("La password attuale non è corretta.", "INVALID_CURRENT_PASSWORD");
-        }
-
-        String hashedNewPassword = RegistrationService.hashPassword(request.getNewPassword());
-        if (hashedNewPassword.equals(user.getPassword())) {
-            throw new ApiBankException("La nuova password non può essere uguale a quella attuale.", "SAME_PASSWORD");
-        }
-
         String newPwd = request.getNewPassword();
         if (newPwd.length() < 8
                 || !newPwd.matches(".*[A-Z].*")
@@ -102,8 +92,6 @@ public class PasswordChangeService {
         User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
 
-        String hashedNewPassword = RegistrationService.hashPassword(request.getNewPlainPassword());
-        user.setPassword(hashedNewPassword);
         user.setPasswordChangedAt(LocalDateTime.now(ZoneId.of("Europe/Rome")));
         userRepository.save(user);
 

@@ -14,9 +14,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PasswordChangeRequestCreateDto {
 
-    @NotBlank(message = "La password attuale è obbligatoria")
-    private String currentPassword;
-
     @NotBlank(message = "La nuova password è obbligatoria")
     @Size(min = 8, message = "La password deve avere almeno 8 caratteri")
     @Pattern(

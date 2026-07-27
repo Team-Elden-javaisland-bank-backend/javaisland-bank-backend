@@ -105,6 +105,7 @@ public class UserService {
                     .lastName(u.getLastName())
                     .birthDate(u.getBirthDate())
                     .email(u.getEmail())
+                    .profilePictureUrl(u.getProfilePictureUrl())
                     .registeredAt(u.getCreatedAt())
                     .build()
         ).toList();
@@ -119,21 +120,12 @@ public class UserService {
             throw new ApiBankException("Utente già attivato. Usa l'endpoint di attivazione conti per i conti secondari.", "USER_ALREADY_ACTIVE");
         }
 
-        String keycloakId = null;
-        if (user.getPlainPassword() != null && !user.getPlainPassword().isBlank()) {
+        if (user.getKeycloakId() != null) {
             try {
-                keycloakId = keycloakAdminService.createUser(
-                        user.getUsername(),
-                        user.getPlainPassword(),
-                        user.getEmail(),
-                        user.getFirstName(),
-                        user.getLastName(),
-                        true);
-                user.setKeycloakId(keycloakId);
-                user.setPlainPassword(null);
+                keycloakAdminService.setUserEnabled(user.getKeycloakId(), true);
             } catch (Exception e) {
                 throw new ApiBankException(
-                        "Creazione utente Keycloak fallita. Riprova la validazione.", "KEYCLOAK_CREATION_FAILED");
+                        "Attivazione utente Keycloak fallita. Riprova la validazione.", "KEYCLOAK_ACTIVATION_FAILED");
             }
         }
 
@@ -153,9 +145,8 @@ public class UserService {
                     "Registrazione approvata: " + user.getFirstName() + " " + user.getLastName());
             notificationService.send(userId, "ACCOUNT", "Registrazione approvata! Il tuo conto è attivo.", "NOTIF_REGISTRATION_APPROVED", null);
         } catch (Exception e) {
-            if (keycloakId != null) {
-                keycloakAdminService.deleteUser(keycloakId);
-                user.setKeycloakId(null);
+            if (user.getKeycloakId() != null) {
+                keycloakAdminService.setUserEnabled(user.getKeycloakId(), false);
             }
             throw e;
         }
@@ -170,6 +161,11 @@ public class UserService {
                 .orElseThrow(() -> new ApiBankException("Stato PENDING non configurato."));
         if (!user.getStatus().getId().equals(pendingStatus.getId())) {
             throw new ApiBankException("La registrazione non è in stato PENDING.", "INVALID_STATE");
+        }
+
+        if (user.getKeycloakId() != null) {
+            keycloakAdminService.deleteUser(user.getKeycloakId());
+            user.setKeycloakId(null);
         }
 
         var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
@@ -195,6 +191,7 @@ public class UserService {
                     .lastName(u.getLastName())
                     .birthDate(u.getBirthDate())
                     .email(u.getEmail())
+                    .profilePictureUrl(u.getProfilePictureUrl())
                     .registeredAt(u.getCreatedAt())
                     .build()
         ).toList();
@@ -269,6 +266,7 @@ public class UserService {
                         .lastName(u.getLastName())
                         .email(u.getEmail())
                         .statusId(u.getStatus().getId())
+                        .profilePictureUrl(u.getProfilePictureUrl())
                         .build())
                 .toList();
     }

@@ -349,6 +349,7 @@ public class AccountService {
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
                 .accountNumber(account.getAccountNumber())
+                .profilePictureUrl(user.getProfilePictureUrl())
                 .build();
     }
 
@@ -384,6 +385,7 @@ public class AccountService {
                 .residence(user.getResidence())
                 .birthPlace(user.getBirthPlace())
                 .birthProvince(user.getBirthProvince())
+                .profilePictureUrl(user.getProfilePictureUrl())
                 .userStatus(user.getStatus().getUserStatus())
                 .userCreatedAt(user.getCreatedAt())
                 .accountNumber(account.getAccountNumber())
@@ -416,6 +418,7 @@ public class AccountService {
                 .residence(user.getResidence())
                 .birthPlace(user.getBirthPlace())
                 .birthProvince(user.getBirthProvince())
+                .profilePictureUrl(user.getProfilePictureUrl())
                 .userStatus(user.getStatus().getUserStatus())
                 .userCreatedAt(user.getCreatedAt());
 
@@ -498,6 +501,7 @@ public class AccountService {
                 .profileId(account.getUser().getId())
                 .profileFirstName(account.getUser().getFirstName())
                 .profileLastName(account.getUser().getLastName())
+                .profilePictureUrl(account.getUser().getProfilePictureUrl())
                 .userStatusId(account.getUser().getStatus().getId())
                 .initialAmount(account.getInitialAmount())
                 .createdAt(account.getCreatedAt())

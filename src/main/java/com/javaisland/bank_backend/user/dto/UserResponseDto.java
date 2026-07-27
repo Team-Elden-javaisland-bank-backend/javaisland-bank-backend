@@ -25,4 +25,5 @@ public class UserResponseDto {
     private String residence;
     private String birthPlace;
     private String birthProvince;
+    private String profilePictureUrl;
 }

@@ -31,6 +31,7 @@ public class AdminAccountController {
         private Long userId;
         private String userFullName;
         private String userEmail;
+        private String profilePictureUrl;
         private LocalDateTime createdAt;
         private LocalDateTime closedAt;
     }
@@ -54,6 +55,7 @@ public class AdminAccountController {
             dto.setUserId(user.getId());
             dto.setUserFullName(user.getFirstName() + " " + user.getLastName());
             dto.setUserEmail(user.getEmail());
+            dto.setProfilePictureUrl(user.getProfilePictureUrl());
             dto.setCreatedAt(a.getCreatedAt());
             dto.setClosedAt(a.getClosedAt());
             return dto;
@@ -76,6 +78,7 @@ public class AdminAccountController {
         dto.setUserId(user.getId());
         dto.setUserFullName(user.getFirstName() + " " + user.getLastName());
         dto.setUserEmail(user.getEmail());
+        dto.setProfilePictureUrl(user.getProfilePictureUrl());
         dto.setCreatedAt(a.getCreatedAt());
         dto.setClosedAt(a.getClosedAt());
 

@@ -15,4 +15,5 @@ public class CustomerListItemDto {
     private String lastName;
     private String email;
     private Integer statusId;
+    private String profilePictureUrl;
 }

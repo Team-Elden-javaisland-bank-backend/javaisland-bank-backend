@@ -12,5 +12,6 @@ public record EmployeeListItemDto(
     String lastName,
     String email,
     String status,
+    String profilePictureUrl,
     LocalDateTime createdAt
 ) {}

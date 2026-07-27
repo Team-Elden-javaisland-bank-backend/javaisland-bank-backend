@@ -30,6 +30,7 @@ public class CustomerProfileDto {
     private String residence;
     private String birthPlace;
     private String birthProvince;
+    private String profilePictureUrl;
     private String userStatus;
     private LocalDateTime registeredAt;
 

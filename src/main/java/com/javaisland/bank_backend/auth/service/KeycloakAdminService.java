@@ -221,4 +221,21 @@ public class KeycloakAdminService {
             log.warn("Failed to logout Keycloak user {}: status={}", keycloakId, e.getStatusCode());
         }
     }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> getAllUsers() {
+        String adminToken = getAdminToken();
+        String url = keycloakAuthUrl + "/admin/realms/" + keycloakRealm + "/users?max=1000";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(adminToken);
+
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+        ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, entity, List.class);
+
+        if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+            return response.getBody();
+        }
+        return List.of();
+    }
 }

@@ -19,8 +19,6 @@ Table users {
   last_name varchar(100) [not null]
   birth_date date [not null]
   email varchar(150) [unique, not null]
-  password varchar(64) [not null]
-  plain_password varchar(100)
   role_type_id integer [not null, ref: > role_types.id]
   status_id integer [not null, ref: > user_statuses.id]
   branch_code varchar(20)
@@ -33,6 +31,7 @@ Table users {
   birth_province varchar(2)
   created_at timestamp [default: `now()`]
   limits_setup_complete boolean [not null, default: false]
+  profile_picture_url varchar(500)
 }
 
 Table account_statuses {

@@ -18,4 +18,5 @@ public class LoginResponseDto {
     private String email;
     private boolean limitsSetupComplete;
     private boolean pinSetupComplete;
+    private String profilePictureUrl;
 }
