@@ -172,6 +172,7 @@ public class EmployeeUserController {
                         .userLastName(user.getLastName())
                         .userEmail(user.getEmail())
                         .accountNumber(iban)
+                        .requestedAmount(acc.getInitialAmount())
                         .createdAt(acc.getCreatedAt())
                         .build());
             } else if (acc.getStatusId() == 3 && acc.getClosureRequestedAt() != null) {

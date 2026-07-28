@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.javaisland.bank_backend.account.dto.DashboardSummaryDto;
 import com.javaisland.bank_backend.account.dto.MonthlySummaryDto;
 import com.javaisland.bank_backend.transaction.repository.TransactionRepository;
 import java.math.BigDecimal;
@@ -30,7 +31,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -47,6 +47,7 @@ public class AccountService {
     private final TransactionRepository transactionRepository;
     private final AuditLogService auditLogService;
     private final NotificationService notificationService;
+    private final IbanGenerator ibanGenerator;
 
     @Transactional(propagation = Propagation.REQUIRED)
     public Account createInitialAccountForUser(User user) {
@@ -161,8 +162,9 @@ public class AccountService {
         account.setStatusId(AccountStatus.FROZEN);
         account.setClosureRequestedAt(LocalDateTime.now());
         accountRepository.save(account);
+        cardService.blockCardsByAccountId(account.getId());
         notificationService.send(userId, "ACCOUNT", "Richiesta di chiusura conto " + accountNumber + " inviata. In attesa di approvazione.", "NOTIF_CLOSURE_REQUESTED", "[\"" + accountNumber + "\"]");
-        log.info("Closure requested by user id={} for account {}", user.getId(), accountNumber);
+        log.info("Closure requested by user id={} for account {} — cards blocked", user.getId(), accountNumber);
     }
 
     @Transactional
@@ -175,8 +177,9 @@ public class AccountService {
         account.setClosureRequestedAt(null);
         account.setClosureRejectedAt(LocalDateTime.now());
         accountRepository.save(account);
+        cardService.unblockCardsByAccountId(account.getId());
         notificationService.send(account.getUser().getId(), "ACCOUNT", "La richiesta di chiusura del conto " + accountNumber + " è stata rifiutata.", "NOTIF_CLOSURE_REJECTED", "[\"" + accountNumber + "\"]");
-        log.info("Closure request rejected for account {} by employee — back to ACTIVE", accountNumber);
+        log.info("Closure request rejected for account {} by employee — back to ACTIVE, cards unblocked", accountNumber);
     }
 
     @Transactional
@@ -187,10 +190,11 @@ public class AccountService {
         }
         account.setStatusId(AccountStatus.FROZEN);
         accountRepository.save(account);
+        cardService.blockCardsByAccountId(account.getId());
         auditLogService.log("ACCOUNT", account.getId(), "FREEZE", "system",
                 "Conto congelato: " + accountNumber);
         notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato congelato da un impiegato.", "NOTIF_ACCOUNT_FROZEN", "[\"" + accountNumber + "\"]");
-        log.info("Account {} frozen by employee", accountNumber);
+        log.info("Account {} frozen by employee — cards blocked", accountNumber);
     }
 
     @Transactional
@@ -206,6 +210,7 @@ public class AccountService {
             account.setClosureRejectedAt(LocalDateTime.now());
         }
         accountRepository.save(account);
+        cardService.unblockCardsByAccountId(account.getId());
         auditLogService.log("ACCOUNT", account.getId(), "UNFREEZE", "system",
                 "Conto scongelato: " + accountNumber);
         if (hadClosureRequest) {
@@ -231,8 +236,9 @@ public class AccountService {
         account.setClosedAt(LocalDateTime.now());
         account.setClosureRequestedAt(null);
         accountRepository.save(account);
+        cardService.blockCardsByAccountId(account.getId());
         notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato chiuso.", "NOTIF_ACCOUNT_CLOSED", "[\"" + accountNumber + "\"]");
-        log.info("Account {} closed by employee", accountNumber);
+        log.info("Account {} closed by employee — cards blocked", accountNumber);
     }
 
     @Transactional
@@ -324,6 +330,47 @@ public class AccountService {
                 .monthlyExpenses(expenses)
                 .monthlyIncome(income)
                 .movementCount(movementCount)
+                .balanceChangePercentage(changePercentage)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public DashboardSummaryDto getDashboardSummary(Long userId) {
+        User user = getUserOrThrow(userId);
+        List<Account> accounts = accountRepository.findByUserId(user.getId());
+
+        LocalDate today = LocalDate.now();
+        LocalDate startOfMonth = today.withDayOfMonth(1);
+        LocalDateTime start = startOfMonth.atStartOfDay();
+        LocalDateTime end = today.atTime(23, 59, 59);
+
+        BigDecimal totalCurrentBalance = BigDecimal.ZERO;
+        BigDecimal totalIncome = BigDecimal.ZERO;
+        BigDecimal totalExpenses = BigDecimal.ZERO;
+
+        for (Account account : accounts) {
+            if (account.getStatusId() != 2) continue;
+
+            totalCurrentBalance = totalCurrentBalance.add(account.getBalance());
+            BigDecimal income = transactionRepository.sumInflowByAccountBetween(account.getId(), start, end);
+            BigDecimal expenses = transactionRepository.sumOutflowByAccountBetween(account.getId(), start, end);
+            totalIncome = totalIncome.add(income);
+            totalExpenses = totalExpenses.add(expenses);
+        }
+
+        BigDecimal totalPreviousBalance = totalCurrentBalance.subtract(totalIncome).add(totalExpenses);
+        BigDecimal changeAbsolute = totalCurrentBalance.subtract(totalPreviousBalance);
+        BigDecimal changePercentage = BigDecimal.ZERO;
+        if (totalPreviousBalance.compareTo(BigDecimal.ZERO) != 0) {
+            changePercentage = changeAbsolute
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(totalPreviousBalance.abs(), 1, RoundingMode.HALF_UP);
+        }
+
+        return DashboardSummaryDto.builder()
+                .totalCurrentBalance(totalCurrentBalance)
+                .totalPreviousMonthBalance(totalPreviousBalance)
+                .balanceChangeAbsolute(changeAbsolute)
                 .balanceChangePercentage(changePercentage)
                 .build();
     }
@@ -485,7 +532,7 @@ public class AccountService {
 
     private String generateUniqueAccountNumber() {
         for (int attempt = 0; attempt < MAX_IBAN_GENERATION_ATTEMPTS; attempt++) {
-            String candidate = "IT" + UUID.randomUUID().toString().replace("-", "").substring(0, 15).toUpperCase();
+            String candidate = ibanGenerator.generate();
             if (!accountRepository.existsByAccountNumber(candidate)) {
                 return candidate;
             }

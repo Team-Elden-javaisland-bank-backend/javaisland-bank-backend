@@ -80,6 +80,28 @@ public class CardService {
         cardRepository.findByAccountId(accountId).forEach(cardRepository::delete);
     }
 
+    @Transactional
+    public void blockCardsByAccountId(Long accountId) {
+        var blockedStatus = cardStatusRepository.findByStatusName("BLOCKED")
+                .orElseThrow(() -> new ApiBankException("Stato carta BLOCKED non configurato."));
+        cardRepository.findByAccountId(accountId).forEach(card -> {
+            if (!card.getStatus().getStatusName().equals("BLOCKED")) {
+                card.setStatus(blockedStatus);
+                cardRepository.save(card);
+            }
+        });
+    }
+
+    @Transactional
+    public void unblockCardsByAccountId(Long accountId) {
+        var activeStatus = cardStatusRepository.findByStatusName("ACTIVE")
+                .orElseThrow(() -> new ApiBankException("Stato carta ACTIVE non configurato."));
+        cardRepository.findByAccountId(accountId).forEach(card -> {
+            card.setStatus(activeStatus);
+            cardRepository.save(card);
+        });
+    }
+
     public Card updateCardStatus(Long cardId, String newStatusName) {
         Card card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new ApiBankException("Carta non trovata con questo ID."));

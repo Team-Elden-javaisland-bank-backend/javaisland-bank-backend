@@ -4,6 +4,7 @@ import com.javaisland.bank_backend.account.dto.AccountHolderDto;
 import com.javaisland.bank_backend.account.dto.AccountLimitResponseDto;
 import com.javaisland.bank_backend.account.dto.AccountResponseDto;
 import com.javaisland.bank_backend.account.dto.CloseAccountRequestDto;
+import com.javaisland.bank_backend.account.dto.DashboardSummaryDto;
 import com.javaisland.bank_backend.account.dto.MonthlySummaryDto;
 import com.javaisland.bank_backend.account.dto.OpenAccountRequestDto;
 import com.javaisland.bank_backend.account.dto.SetLimitRequestDto;
@@ -33,6 +34,12 @@ public class AccountController {
     public ResponseEntity<List<AccountResponseDto>> listMyAccounts(@AuthenticationPrincipal Jwt jwt) {
         Long userId = getUserId(jwt);
         return ResponseEntity.ok(accountService.getAccountsByUserId(userId));
+    }
+
+    @GetMapping("/dashboard-summary")
+    public ResponseEntity<DashboardSummaryDto> getDashboardSummary(@AuthenticationPrincipal Jwt jwt) {
+        Long userId = getUserId(jwt);
+        return ResponseEntity.ok(accountService.getDashboardSummary(userId));
     }
 
     @PostMapping("/open")

@@ -162,7 +162,8 @@ public class TransactionService {
         assertOwnership(userId, source);
         Account destination = getAccountOrThrow(destAccountNumber);
 
-        boolean isInstant = Boolean.TRUE.equals(request.getIsInstant());
+        boolean isSameUser = source.getUser().getId().equals(destination.getUser().getId());
+        boolean isInstant = isSameUser || Boolean.TRUE.equals(request.getIsInstant());
         accountLimitService.validateTransfer(source, request.getAmount(), isInstant);
 
         String typeName = isInstant ? "INSTANT_TRANSFER" : "TRANSFER";
