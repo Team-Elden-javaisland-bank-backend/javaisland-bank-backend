@@ -1,5 +1,6 @@
 // JAVAISLAND BANK - Database Schema
 // Visualizable on dbdiagram.io
+// Source: actual PostgreSQL database (real_bank_postgres)
 
 Table role_types {
   id integer [primary key, increment]
@@ -8,7 +9,7 @@ Table role_types {
 
 Table user_statuses {
   id integer [primary key, increment]
-  user_status varchar(30) [unique, not null]
+  status_name varchar(30) [unique, not null]
 }
 
 Table users {
@@ -17,21 +18,22 @@ Table users {
   username varchar(50) [unique, not null]
   first_name varchar(100) [not null]
   last_name varchar(100) [not null]
-  birth_date date [not null]
+  birth_date date
   email varchar(150) [unique, not null]
   role_type_id integer [not null, ref: > role_types.id]
   status_id integer [not null, ref: > user_statuses.id]
   branch_code varchar(20)
-  profession varchar(100)
+  profile_picture_url varchar(500)
+  password_changed_at timestamp
   gender varchar(1)
-  fiscal_code varchar(16) [unique]
+  fiscal_code varchar(16)
   phone varchar(20)
   residence varchar(200)
   birth_place varchar(100)
   birth_province varchar(2)
-  created_at timestamp [default: `now()`]
+  profession varchar(100)
   limits_setup_complete boolean [not null, default: false]
-  profile_picture_url varchar(500)
+  created_at timestamp
 }
 
 Table account_statuses {
@@ -42,13 +44,11 @@ Table account_statuses {
 Table accounts {
   id bigint [primary key, increment]
   account_number varchar(50) [unique, not null]
-  balance numeric(15,2) [default: 0.00]
-  status_id integer [not null, ref: > account_statuses.id]
+  balance numeric(15,2) [not null]
+  status_id integer [not null]
   user_id bigint [not null, ref: > users.id]
-  created_at timestamp [default: `now()`]
   closed_at timestamp
-  source_account_number varchar(50)
-  initial_amount numeric(15,2)
+  created_at timestamp
   version bigint
 }
 
@@ -56,37 +56,6 @@ Table limit_types {
   id integer [primary key, increment]
   limit_name varchar(30) [unique, not null]
   notes varchar(255)
-  change_policy varchar(20) [not null, default: `'BANK_ONLY'`]
-}
-
-Table account_limits {
-  id bigint [primary key, increment]
-  account_id bigint [not null, ref: > accounts.id]
-  limit_type_id integer [not null, ref: > limit_types.id]
-  max_amount numeric(15,2) [not null]
-  updated_at timestamp [default: `now()`]
-  // Composite unique: (account_id, limit_type_id)
-}
-
-Table card_types {
-  id integer [primary key, increment]
-  type_name varchar(30) [unique, not null]
-}
-
-Table card_statuses {
-  id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]
-}
-
-Table cards {
-  id bigint [primary key, increment]
-  card_number varchar(16) [unique, not null]
-  card_type_id integer [not null, ref: > card_types.id]
-  holder_name varchar(150) [not null]
-  expiration_date date [not null]
-  cvv varchar(3) [not null]
-  status_id integer [ref: > card_statuses.id]
-  account_id bigint [not null, ref: > accounts.id]
 }
 
 Table transaction_types {
@@ -107,25 +76,50 @@ Table transactions {
   description varchar(255)
   source_balance_after numeric(15,2)
   dest_balance_after numeric(15,2)
-  created_at timestamp [default: `now()`]
+  created_at timestamp
   source_account_id bigint [ref: > accounts.id]
   destination_account_id bigint [ref: > accounts.id]
-  scheduled_date timestamp
 }
 
-Table beneficiaries {
-  id bigint [primary key, increment]
-  user_id bigint [not null, ref: > users.id]
-  destination_account_number varchar(50) [not null]
-  destination_holder_name varchar(200)
-  nickname varchar(100) [not null]
-  created_at timestamp
-  // Composite unique: (user_id, destination_account_number)
-}
-
-Table saved_beneficiaries {
+Table card_types {
   id integer [primary key, increment]
-  beneficiary_name varchar(150) [not null]
-  account_number varchar(50) [not null]
-  user_id integer [not null, ref: > users.id]
+  type_name varchar(30) [unique, not null]
+}
+
+Table card_statuses {
+  id integer [primary key, increment]
+  status_name varchar(30) [unique, not null]
+}
+
+Table cards {
+  id bigint [primary key, increment]
+  account_id bigint [not null]
+  card_number varchar(16) [unique, not null]
+  cvv varchar(3) [not null]
+  expiration_date date [not null]
+  holder_name varchar(150) [not null]
+  card_type_id integer [not null, ref: > card_types.id]
+  status_id integer [ref: > card_statuses.id]
+}
+
+Table loans {
+  id bigint [primary key, increment]
+  account_id bigint [not null]
+  user_id bigint [not null]
+  loan_amount numeric(15,2) [not null]
+  interest_rate numeric(5,2) [not null]
+  duration_months integer [not null]
+  monthly_installment numeric(15,2) [not null]
+  status varchar(30) [not null]
+  created_at timestamp
+}
+
+Table requests {
+  id bigint [primary key, increment]
+  user_id bigint [not null]
+  description varchar(255) [not null]
+  status varchar(30) [not null]
+  rejection_reason varchar(255)
+  reviewed_by_user_id bigint
+  created_at timestamp
 }

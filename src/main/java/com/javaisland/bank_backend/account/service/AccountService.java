@@ -236,9 +236,9 @@ public class AccountService {
         account.setClosedAt(LocalDateTime.now());
         account.setClosureRequestedAt(null);
         accountRepository.save(account);
-        cardService.blockCardsByAccountId(account.getId());
+        cardService.closeCardsByAccountId(account.getId());
         notificationService.send(account.getUser().getId(), "ACCOUNT", "Il tuo conto " + accountNumber + " è stato chiuso.", "NOTIF_ACCOUNT_CLOSED", "[\"" + accountNumber + "\"]");
-        log.info("Account {} closed by employee — cards blocked", accountNumber);
+        log.info("Account {} closed by employee — cards closed", accountNumber);
     }
 
     @Transactional
@@ -313,24 +313,13 @@ public class AccountService {
         LocalDateTime end = endOfMonth.atTime(23, 59, 59);
 
         Long accountId = account.getId();
-        BigDecimal expenses = transactionRepository.sumOutflowByAccountBetween(accountId, start, end);
         BigDecimal income = transactionRepository.sumInflowByAccountBetween(accountId, start, end);
         Long movementCount = transactionRepository.countByAccountBetween(accountId, start, end);
 
-        BigDecimal previousBalance = account.getBalance().subtract(income).add(expenses);
-        BigDecimal changePercentage = BigDecimal.ZERO;
-        if (previousBalance.compareTo(BigDecimal.ZERO) != 0) {
-            changePercentage = account.getBalance()
-                    .subtract(previousBalance)
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(previousBalance.abs(), 1, RoundingMode.HALF_UP);
-        }
-
         return MonthlySummaryDto.builder()
-                .monthlyExpenses(expenses)
                 .monthlyIncome(income)
                 .movementCount(movementCount)
-                .balanceChangePercentage(changePercentage)
+                .balanceChangePercentage(BigDecimal.ZERO)
                 .build();
     }
 
@@ -339,39 +328,18 @@ public class AccountService {
         User user = getUserOrThrow(userId);
         List<Account> accounts = accountRepository.findByUserId(user.getId());
 
-        LocalDate today = LocalDate.now();
-        LocalDate startOfMonth = today.withDayOfMonth(1);
-        LocalDateTime start = startOfMonth.atStartOfDay();
-        LocalDateTime end = today.atTime(23, 59, 59);
-
         BigDecimal totalCurrentBalance = BigDecimal.ZERO;
-        BigDecimal totalIncome = BigDecimal.ZERO;
-        BigDecimal totalExpenses = BigDecimal.ZERO;
 
         for (Account account : accounts) {
             if (account.getStatusId() != 2) continue;
-
             totalCurrentBalance = totalCurrentBalance.add(account.getBalance());
-            BigDecimal income = transactionRepository.sumInflowByAccountBetween(account.getId(), start, end);
-            BigDecimal expenses = transactionRepository.sumOutflowByAccountBetween(account.getId(), start, end);
-            totalIncome = totalIncome.add(income);
-            totalExpenses = totalExpenses.add(expenses);
-        }
-
-        BigDecimal totalPreviousBalance = totalCurrentBalance.subtract(totalIncome).add(totalExpenses);
-        BigDecimal changeAbsolute = totalCurrentBalance.subtract(totalPreviousBalance);
-        BigDecimal changePercentage = BigDecimal.ZERO;
-        if (totalPreviousBalance.compareTo(BigDecimal.ZERO) != 0) {
-            changePercentage = changeAbsolute
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(totalPreviousBalance.abs(), 1, RoundingMode.HALF_UP);
         }
 
         return DashboardSummaryDto.builder()
                 .totalCurrentBalance(totalCurrentBalance)
-                .totalPreviousMonthBalance(totalPreviousBalance)
-                .balanceChangeAbsolute(changeAbsolute)
-                .balanceChangePercentage(changePercentage)
+                .totalPreviousMonthBalance(BigDecimal.ZERO)
+                .balanceChangeAbsolute(BigDecimal.ZERO)
+                .balanceChangePercentage(BigDecimal.ZERO)
                 .build();
     }
 

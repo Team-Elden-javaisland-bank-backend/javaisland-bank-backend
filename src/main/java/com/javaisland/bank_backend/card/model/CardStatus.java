@@ -11,6 +11,8 @@ import lombok.*;
 @AllArgsConstructor
 public class CardStatus {
 
+    public static final int CLOSED = 4;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;

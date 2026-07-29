@@ -93,6 +93,18 @@ public class CardService {
     }
 
     @Transactional
+    public void closeCardsByAccountId(Long accountId) {
+        var closedStatus = cardStatusRepository.findByStatusName("CLOSED")
+                .orElseThrow(() -> new ApiBankException("Stato carta CLOSED non configurato."));
+        cardRepository.findByAccountId(accountId).forEach(card -> {
+            if (!card.getStatus().getStatusName().equals("CLOSED")) {
+                card.setStatus(closedStatus);
+                cardRepository.save(card);
+            }
+        });
+    }
+
+    @Transactional
     public void unblockCardsByAccountId(Long accountId) {
         var activeStatus = cardStatusRepository.findByStatusName("ACTIVE")
                 .orElseThrow(() -> new ApiBankException("Stato carta ACTIVE non configurato."));

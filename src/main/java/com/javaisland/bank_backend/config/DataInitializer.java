@@ -97,16 +97,19 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedCardStatuses() {
-        if (cardStatusRepository.count() > 0) return;
-        cardStatusRepository.save(new CardStatus(null, "INACTIVE"));
-        cardStatusRepository.save(new CardStatus(null, "ACTIVE"));
-        cardStatusRepository.save(new CardStatus(null, "BLOCKED"));
+        if (cardStatusRepository.count() == 0) {
+            cardStatusRepository.save(new CardStatus(null, "INACTIVE"));
+            cardStatusRepository.save(new CardStatus(null, "ACTIVE"));
+            cardStatusRepository.save(new CardStatus(null, "BLOCKED"));
+        }
+        if (cardStatusRepository.findByStatusName("CLOSED").isEmpty()) {
+            cardStatusRepository.save(new CardStatus(null, "CLOSED"));
+        }
     }
 
     private void seedCardTypes() {
         if (cardTypeRepository.count() > 0) return;
         cardTypeRepository.save(new CardType(null, "DEBIT"));
-        cardTypeRepository.save(new CardType(null, "CREDIT"));
     }
 
     private void seedAccountStatuses() {

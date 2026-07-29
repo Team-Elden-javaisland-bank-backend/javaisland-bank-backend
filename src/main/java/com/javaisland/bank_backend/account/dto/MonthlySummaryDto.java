@@ -11,7 +11,6 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MonthlySummaryDto {
-    private BigDecimal monthlyExpenses;
     private BigDecimal monthlyIncome;
     private Long movementCount;
     private BigDecimal balanceChangePercentage;
