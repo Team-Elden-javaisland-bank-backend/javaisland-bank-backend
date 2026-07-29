@@ -2,6 +2,7 @@ package com.javaisland.bank_backend.employee.controller;
 
 import com.javaisland.bank_backend.account.dto.EmployeeUserDetailDto;
 import com.javaisland.bank_backend.account.model.Account;
+import com.javaisland.bank_backend.account.model.AccountStatus;
 import com.javaisland.bank_backend.account.model.LimitChangeRequest;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.account.repository.LimitChangeRequestRepository;
@@ -25,6 +26,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @RestController
 @RequestMapping("/api/v1/employee/users")
@@ -123,8 +127,19 @@ public class EmployeeUserController {
     public ResponseEntity<List<EmployeeRequestDto>> getAllRequests() {
         List<EmployeeRequestDto> all = new ArrayList<>();
 
-        passwordChangeRequestRepository.findAll().forEach(req -> {
-            User user = userRepository.findById(req.getUserId()).orElse(null);
+        var passwordRequests = passwordChangeRequestRepository.findAll();
+        var limitRequests = limitChangeRequestRepository.findAll();
+
+        var userIds = Stream.concat(
+                passwordRequests.stream().map(PasswordChangeRequest::getUserId),
+                limitRequests.stream().map(LimitChangeRequest::getUserId)
+        ).collect(Collectors.toSet());
+
+        Map<Long, User> usersById = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
+        passwordRequests.forEach(req -> {
+            User user = usersById.get(req.getUserId());
             all.add(EmployeeRequestDto.builder()
                     .id(req.getId())
                     .type("PASSWORD_CHANGE")
@@ -139,8 +154,8 @@ public class EmployeeUserController {
                     .build());
         });
 
-        limitChangeRequestRepository.findAll().forEach(req -> {
-            User user = userRepository.findById(req.getUserId()).orElse(null);
+        limitRequests.forEach(req -> {
+            User user = usersById.get(req.getUserId());
             all.add(EmployeeRequestDto.builder()
                     .id(req.getId())
                     .type("LIMIT_CHANGE")
@@ -161,7 +176,7 @@ public class EmployeeUserController {
         accountRepository.findAll().forEach(acc -> {
             User user = acc.getUser();
             String iban = acc.getAccountNumber();
-            if (acc.getStatusId() == 1) {
+            if (acc.getStatusId() == AccountStatus.INACTIVE) {
                 all.add(EmployeeRequestDto.builder()
                         .id(acc.getId())
                         .type("ACCOUNT_OPENING")
@@ -175,7 +190,7 @@ public class EmployeeUserController {
                         .requestedAmount(acc.getInitialAmount())
                         .createdAt(acc.getCreatedAt())
                         .build());
-            } else if (acc.getStatusId() == 3 && acc.getClosureRequestedAt() != null) {
+            } else if (acc.getStatusId() == AccountStatus.FROZEN && acc.getClosureRequestedAt() != null) {
                 all.add(EmployeeRequestDto.builder()
                         .id(acc.getId())
                         .type("ACCOUNT_CLOSURE")
@@ -188,7 +203,7 @@ public class EmployeeUserController {
                         .accountNumber(iban)
                         .createdAt(acc.getClosureRequestedAt())
                         .build());
-            } else if (acc.getStatusId() == 4) {
+            } else if (acc.getStatusId() == AccountStatus.CLOSED) {
                 all.add(EmployeeRequestDto.builder()
                         .id(acc.getId())
                         .type("ACCOUNT_CLOSURE")

@@ -4,6 +4,7 @@ import com.javaisland.bank_backend.account.dto.AccountResponseDto;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.account.model.Account;
 import com.javaisland.bank_backend.auth.service.KeycloakAdminService;
+import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.model.RoleType;
 import com.javaisland.bank_backend.user.model.UserStatus;
@@ -76,26 +77,28 @@ public class AdminCustomerController {
         var customerRole = roleTypeRepository.findByRoleName("C").orElse(null);
         if (customerRole == null) return ResponseEntity.ok(List.of());
 
-        List<AdminCustomerListItemDto> result = userRepository.findByRoleTypeOrderByFirstNameAscLastNameAsc(customerRole)
-                .stream().map(user -> {
-                    var dto = new AdminCustomerListItemDto();
-                    dto.setUserId(user.getId());
-                    dto.setFirstName(user.getFirstName());
-                    dto.setLastName(user.getLastName());
-                    dto.setEmail(user.getEmail());
-                    dto.setUsername(user.getUsername());
-                    dto.setStatus(user.getStatus().getUserStatus());
-                    dto.setProfilePictureUrl(user.getProfilePictureUrl());
-                    dto.setCreatedAt(user.getCreatedAt());
+        List<User> users = userRepository.findByRoleTypeOrderByFirstNameAscLastNameAsc(customerRole);
+        List<Long> userIds = users.stream().map(User::getId).toList();
+        List<Account> allAccounts = accountRepository.findByUserIdIn(userIds);
+        var accountsByUser = allAccounts.stream().collect(java.util.stream.Collectors.groupingBy(a -> a.getUser().getId()));
 
-                    List<Account> accounts = accountRepository.findByUserId(user.getId());
-                    dto.setAccountCount(accounts.size());
-                    dto.setTotalBalance(accounts.stream()
-                            .map(Account::getBalance)
-                            .reduce(BigDecimal.ZERO, BigDecimal::add));
-
-                    return dto;
-                }).toList();
+        List<AdminCustomerListItemDto> result = users.stream().map(user -> {
+            List<Account> userAccounts = accountsByUser.getOrDefault(user.getId(), List.of());
+            var dto = new AdminCustomerListItemDto();
+            dto.setUserId(user.getId());
+            dto.setFirstName(user.getFirstName());
+            dto.setLastName(user.getLastName());
+            dto.setEmail(user.getEmail());
+            dto.setUsername(user.getUsername());
+            dto.setStatus(user.getStatus().getUserStatus());
+            dto.setProfilePictureUrl(user.getProfilePictureUrl());
+            dto.setCreatedAt(user.getCreatedAt());
+            dto.setAccountCount(userAccounts.size());
+            dto.setTotalBalance(userAccounts.stream()
+                    .map(Account::getBalance)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+            return dto;
+        }).toList();
 
         return ResponseEntity.ok(result);
     }
@@ -103,7 +106,7 @@ public class AdminCustomerController {
     @GetMapping("/{userId}")
     public ResponseEntity<AdminCustomerDetailDto> getCustomerDetail(@PathVariable Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ApiBankException("User not found", "USER_NOT_FOUND"));
 
         var dto = new AdminCustomerDetailDto();
         dto.setUserId(user.getId());
@@ -146,9 +149,9 @@ public class AdminCustomerController {
     public ResponseEntity<Map<String, Object>> syncKeycloakUsers() {
         var kcUsers = keycloakAdminService.getAllUsers();
         var customerRole = roleTypeRepository.findByRoleName("C")
-                .orElseThrow(() -> new RuntimeException("Role C not configured"));
+                .orElseThrow(() -> new ApiBankException("Role C not configured", "ROLE_NOT_FOUND"));
         var activeStatus = userStatusRepository.findByUserStatus("ACTIVE")
-                .orElseThrow(() -> new RuntimeException("Status ACTIVE not configured"));
+                .orElseThrow(() -> new ApiBankException("Status ACTIVE not configured", "STATUS_NOT_FOUND"));
 
         int synced = 0;
         for (Map<String, Object> kcUser : kcUsers) {

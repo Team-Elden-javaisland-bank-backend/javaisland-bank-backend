@@ -6,6 +6,7 @@ import com.javaisland.bank_backend.account.model.AccountStatus;
 import com.javaisland.bank_backend.account.service.AccountLimitService;
 import com.javaisland.bank_backend.beneficiary.service.BeneficiaryService;
 import com.javaisland.bank_backend.common.PageResponseDto;
+import com.javaisland.bank_backend.common.SecurityUtil;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.notification.service.NotificationService;
 import com.javaisland.bank_backend.transaction.dto.TransferRequestDto;
@@ -52,6 +53,7 @@ public class TransactionService {
     private final BeneficiaryService beneficiaryService;
     private final AccountLimitService accountLimitService;
     private final NotificationService notificationService;
+    private final SecurityUtil securityUtil;
 
     @Transactional
     public Transaction transferFunds(Account source, Account destination, BigDecimal amount, String typeName, String statusName, String description) {
@@ -80,7 +82,6 @@ public class TransactionService {
                     "INSUFFICIENT_FUNDS");
             }
             source.setBalance(source.getBalance().subtract(amount));
-            accountRepository.save(source);
             sourceBalanceAfter = source.getBalance();
         }
 
@@ -89,7 +90,6 @@ public class TransactionService {
                 throw new ApiBankException("Il conto " + destination.getAccountNumber() + " non è attivo.", "INVALID_ACCOUNT_STATE");
             }
             destination.setBalance(destination.getBalance().add(amount));
-            accountRepository.save(destination);
             destBalanceAfter = destination.getBalance();
         }
 
@@ -103,6 +103,13 @@ public class TransactionService {
         tx.setSourceBalanceAfter(sourceBalanceAfter);
         tx.setDestBalanceAfter(destBalanceAfter);
         Transaction saved = transactionRepository.save(tx);
+
+        if (source != null) {
+            accountRepository.save(source);
+        }
+        if (destination != null) {
+            accountRepository.save(destination);
+        }
 
         if (destination != null && source != null) {
             notificationService.send(destination.getUser().getId(), "TRANSFER", "Ricevuto bonifico di €" + amount + " da " + source.getAccountNumber() + ".", "NOTIF_TRANSFER_RECEIVED", "[\"" + amount + "\", \"" + source.getAccountNumber() + "\"]");
@@ -353,11 +360,7 @@ public class TransactionService {
     }
 
     private void assertOwnership(Long userId, Account account) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
-        if (!account.getUser().getId().equals(user.getId())) {
-            throw new ApiBankException("Il conto " + account.getAccountNumber() + " non appartiene all'utente corrente.", "FORBIDDEN");
-        }
+        securityUtil.assertOwnership(account, userId);
     }
 
     private Account getAccountOrThrow(String accountNumber) {

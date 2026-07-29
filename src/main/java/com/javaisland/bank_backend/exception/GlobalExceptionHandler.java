@@ -1,6 +1,5 @@
 package com.javaisland.bank_backend.exception;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
@@ -33,8 +32,8 @@ public class GlobalExceptionHandler {
     ) {}
 
     @ExceptionHandler(ApiBankException.class)
-    public ResponseEntity<ErrorResponseDto> handleApiBankException(ApiBankException ex, HttpServletRequest request) {
-        Locale locale = resolveLocale(request);
+    public ResponseEntity<ErrorResponseDto> handleApiBankException(ApiBankException ex) {
+        Locale locale = LocaleContextHolder.getLocale();
         String message = messageSource.getMessage(ex.getErrorCode(), null, ex.getMessage(), locale);
 
         log.warn("Business rule violation: [{}] {}", ex.getErrorCode(), message);
@@ -46,8 +45,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponseDto> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
-        Locale locale = resolveLocale(request);
+    public ResponseEntity<ErrorResponseDto> handleValidation(MethodArgumentNotValidException ex) {
+        Locale locale = LocaleContextHolder.getLocale();
         String fieldErrors = ex.getBindingResult().getFieldErrors().stream()
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .reduce((a, b) -> a + "; " + b)
@@ -62,8 +61,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ErrorResponseDto> handleConstraintViolation(ConstraintViolationException ex, HttpServletRequest request) {
-        Locale locale = resolveLocale(request);
+    public ResponseEntity<ErrorResponseDto> handleConstraintViolation(ConstraintViolationException ex) {
+        Locale locale = LocaleContextHolder.getLocale();
         String violations = ex.getConstraintViolations().stream()
                 .map(v -> v.getPropertyPath() + ": " + v.getMessage())
                 .reduce((a, b) -> a + "; " + b)
@@ -78,8 +77,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponseDto> handleGeneric(Exception ex, HttpServletRequest request) {
-        Locale locale = resolveLocale(request);
+    public ResponseEntity<ErrorResponseDto> handleGeneric(Exception ex) {
+        Locale locale = LocaleContextHolder.getLocale();
         String message = messageSource.getMessage("INTERNAL_ERROR", null, "An unexpected error occurred. Please try again later.", locale);
 
         log.error("Unexpected error", ex);
@@ -89,17 +88,5 @@ public class GlobalExceptionHandler {
         return ResponseEntity.internalServerError()
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body);
-    }
-
-    private Locale resolveLocale(HttpServletRequest request) {
-        String acceptLanguage = request.getHeader("Accept-Language");
-        if (acceptLanguage != null && !acceptLanguage.isBlank()) {
-            try {
-                return Locale.forLanguageTag(acceptLanguage.split(",")[0].trim());
-            } catch (Exception e) {
-                // fallback to Italian
-            }
-        }
-        return Locale.ITALIAN;
     }
 }

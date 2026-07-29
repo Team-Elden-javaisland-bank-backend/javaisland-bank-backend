@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.javaisland.bank_backend.account.dto.DashboardSummaryDto;
 import com.javaisland.bank_backend.account.dto.MonthlySummaryDto;
+import com.javaisland.bank_backend.transaction.model.TransactionStatus;
 import com.javaisland.bank_backend.transaction.repository.TransactionRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -149,6 +150,10 @@ public class AccountService {
         User user = getUserOrThrow(userId);
         Account account = getAccountOrThrow(accountNumber);
         assertOwnership(account, user);
+
+        if (isLastActiveAccount(userId)) {
+            throw new ApiBankException("Non puoi chiudere il tuo unico conto attivo.", "LAST_ACTIVE_ACCOUNT");
+        }
 
         if (account.getStatusId() != AccountStatus.ACTIVE) {
             throw new ApiBankException("Solo un conto attivo può essere messo in richiesta di chiusura.", "INVALID_ACCOUNT_STATE");
@@ -313,8 +318,8 @@ public class AccountService {
         LocalDateTime end = endOfMonth.atTime(23, 59, 59);
 
         Long accountId = account.getId();
-        BigDecimal income = transactionRepository.sumInflowByAccountBetween(accountId, start, end);
-        Long movementCount = transactionRepository.countByAccountBetween(accountId, start, end);
+        BigDecimal income = transactionRepository.sumInflowByAccountBetween(accountId, TransactionStatus.COMPLETED, start, end);
+        Long movementCount = transactionRepository.countByAccountBetween(accountId, TransactionStatus.COMPLETED, start, end);
 
         return MonthlySummaryDto.builder()
                 .monthlyIncome(income)
@@ -331,7 +336,7 @@ public class AccountService {
         BigDecimal totalCurrentBalance = BigDecimal.ZERO;
 
         for (Account account : accounts) {
-            if (account.getStatusId() != 2) continue;
+            if (account.getStatusId() != AccountStatus.ACTIVE) continue;
             totalCurrentBalance = totalCurrentBalance.add(account.getBalance());
         }
 
@@ -371,44 +376,29 @@ public class AccountService {
     @Transactional(readOnly = true)
     public EmployeeUserDetailDto getEmployeeUserDetail(String accountNumber) {
         Account account = getAccountOrThrow(accountNumber);
-        User user = account.getUser();
-
-        var cards = cardRepository.findByAccountId(account.getId()).stream()
-                .map(card -> EmployeeUserDetailDto.CardSummaryDto.builder()
-                        .id(card.getId())
-                        .maskedCardNumber("****" + card.getCardNumber().substring(12))
-                        .fullCardNumber(card.getCardNumber())
-                        .cvv(card.getCvv())
-                        .holderName(card.getHolderName())
-                        .expirationDate(card.getExpirationDate())
-                        .cardType(card.getCardType().getTypeName())
-                        .cardStatus(card.getStatus().getStatusName())
-                        .build())
-                .toList();
-
         return EmployeeUserDetailDto.builder()
-                .userId(user.getId())
-                .username(user.getUsername())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .email(user.getEmail())
-                .birthDate(user.getBirthDate())
-                .profession(user.getProfession())
-                .gender(user.getGender())
-                .fiscalCode(user.getFiscalCode())
-                .phone(user.getPhone())
-                .residence(user.getResidence())
-                .birthPlace(user.getBirthPlace())
-                .birthProvince(user.getBirthProvince())
-                .profilePictureUrl(user.getProfilePictureUrl())
-                .userStatus(user.getStatus().getUserStatus())
-                .userCreatedAt(user.getCreatedAt())
+                .userId(account.getUser().getId())
+                .username(account.getUser().getUsername())
+                .firstName(account.getUser().getFirstName())
+                .lastName(account.getUser().getLastName())
+                .email(account.getUser().getEmail())
+                .birthDate(account.getUser().getBirthDate())
+                .profession(account.getUser().getProfession())
+                .gender(account.getUser().getGender())
+                .fiscalCode(account.getUser().getFiscalCode())
+                .phone(account.getUser().getPhone())
+                .residence(account.getUser().getResidence())
+                .birthPlace(account.getUser().getBirthPlace())
+                .birthProvince(account.getUser().getBirthProvince())
+                .profilePictureUrl(account.getUser().getProfilePictureUrl())
+                .userStatus(account.getUser().getStatus().getUserStatus())
+                .userCreatedAt(account.getUser().getCreatedAt())
                 .accountNumber(account.getAccountNumber())
                 .balance(account.getBalance())
                 .accountStatus(getStatusName(account.getStatusId()))
                 .accountCreatedAt(account.getCreatedAt())
                 .closedAt(account.getClosedAt())
-                .cards(cards)
+                .cards(toCardSummaryList(account.getId()))
                 .build();
     }
 
@@ -439,37 +429,39 @@ public class AccountService {
 
         if (accountOpt.isPresent()) {
             Account account = accountOpt.get();
-            var cards = cardRepository.findByAccountId(account.getId()).stream()
-                    .map(card -> EmployeeUserDetailDto.CardSummaryDto.builder()
-                            .id(card.getId())
-                            .maskedCardNumber("****" + card.getCardNumber().substring(12))
-                            .fullCardNumber(card.getCardNumber())
-                            .cvv(card.getCvv())
-                            .holderName(card.getHolderName())
-                            .expirationDate(card.getExpirationDate())
-                            .cardType(card.getCardType().getTypeName())
-                            .cardStatus(card.getStatus().getStatusName())
-                            .build())
-                    .toList();
-
             builder.accountNumber(account.getAccountNumber())
                     .balance(account.getBalance())
                     .accountStatus(getStatusName(account.getStatusId()))
                     .accountCreatedAt(account.getCreatedAt())
                     .closedAt(account.getClosedAt())
-                    .cards(cards);
+                    .cards(toCardSummaryList(account.getId()));
         }
 
         return builder.build();
     }
 
+    private List<EmployeeUserDetailDto.CardSummaryDto> toCardSummaryList(Long accountId) {
+        return cardRepository.findByAccountId(accountId).stream()
+                .map(card -> EmployeeUserDetailDto.CardSummaryDto.builder()
+                        .id(card.getId())
+                        .maskedCardNumber("****" + card.getCardNumber().substring(12))
+                        .fullCardNumber(card.getCardNumber())
+                        .cvv(card.getCvv())
+                        .holderName(card.getHolderName())
+                        .expirationDate(card.getExpirationDate())
+                        .cardType(card.getCardType().getTypeName())
+                        .cardStatus(card.getStatus().getStatusName())
+                        .build())
+                .toList();
+    }
+
     private String getStatusName(Integer statusId) {
         if (statusId == null) return "Sconosciuto";
         return switch (statusId) {
-            case 1 -> "INATTIVO";
-            case 2 -> "ATTIVO";
-            case 3 -> "CONGELATO";
-            case 4 -> "CHIUSO";
+            case AccountStatus.INACTIVE -> "INATTIVO";
+            case AccountStatus.ACTIVE -> "ATTIVO";
+            case AccountStatus.FROZEN -> "CONGELATO";
+            case AccountStatus.CLOSED -> "CHIUSO";
             default -> "SCONOSCIUTO";
         };
     }

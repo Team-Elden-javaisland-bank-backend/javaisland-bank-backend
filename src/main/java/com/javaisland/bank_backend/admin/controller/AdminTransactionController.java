@@ -5,6 +5,7 @@ import com.javaisland.bank_backend.transaction.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.Data;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -42,18 +43,11 @@ public class AdminTransactionController {
                 ? LocalDateTime.now().minusDays(recentDays)
                 : LocalDateTime.now().minusDays(30);
 
-        PageRequest page = PageRequest.of(0, 500);
-
         List<Transaction> transactions;
         if (typeId != null) {
-            transactions = transactionRepository.findAll(page).getContent().stream()
-                    .filter(t -> t.getTypeId().equals(typeId))
-                    .filter(t -> t.getCreatedAt().isAfter(since))
-                    .toList();
+            transactions = transactionRepository.findByTypeIdAndCreatedAtAfter(typeId, since, PageRequest.of(0, 500, Sort.by(Sort.Direction.DESC, "createdAt")));
         } else {
-            transactions = transactionRepository.findAll(page).getContent().stream()
-                    .filter(t -> t.getCreatedAt().isAfter(since))
-                    .toList();
+            transactions = transactionRepository.findByCreatedAtAfter(since, PageRequest.of(0, 500, Sort.by(Sort.Direction.DESC, "createdAt")));
         }
 
         List<AdminTransactionListItemDto> result = transactions.stream().map(t -> {

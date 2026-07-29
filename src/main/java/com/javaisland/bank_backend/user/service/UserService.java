@@ -24,6 +24,7 @@ import com.javaisland.bank_backend.user.repository.RoleTypeRepository;
 import com.javaisland.bank_backend.user.repository.UserPinRepository;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import com.javaisland.bank_backend.user.repository.UserStatusRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,7 @@ import java.util.Comparator;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class UserService {
 
@@ -55,42 +57,6 @@ public class UserService {
     private final NotificationRepository notificationRepository;
     private final PasswordChangeRequestRepository passwordChangeRequestRepository;
     private final UserPinRepository userPinRepository;
-
-    public UserService(UserRepository userRepository,
-                       UserStatusRepository userStatusRepository,
-                       RoleTypeRepository roleTypeRepository,
-                       AccountRepository accountRepository,
-                       AccountService accountService,
-                       CardService cardService,
-                       KeycloakAdminService keycloakAdminService,
-                       AuditLogService auditLogService,
-                       NotificationService notificationService,
-                       CardRepository cardRepository,
-                       AccountLimitRepository accountLimitRepository,
-                       LimitChangeRequestRepository limitChangeRequestRepository,
-                       BeneficiaryRepository beneficiaryRepository,
-                       SavedBeneficiaryRepository savedBeneficiaryRepository,
-                       NotificationRepository notificationRepository,
-                       PasswordChangeRequestRepository passwordChangeRequestRepository,
-                       UserPinRepository userPinRepository) {
-        this.userRepository = userRepository;
-        this.userStatusRepository = userStatusRepository;
-        this.roleTypeRepository = roleTypeRepository;
-        this.accountRepository = accountRepository;
-        this.accountService = accountService;
-        this.cardService = cardService;
-        this.keycloakAdminService = keycloakAdminService;
-        this.auditLogService = auditLogService;
-        this.notificationService = notificationService;
-        this.cardRepository = cardRepository;
-        this.accountLimitRepository = accountLimitRepository;
-        this.limitChangeRequestRepository = limitChangeRequestRepository;
-        this.beneficiaryRepository = beneficiaryRepository;
-        this.savedBeneficiaryRepository = savedBeneficiaryRepository;
-        this.notificationRepository = notificationRepository;
-        this.passwordChangeRequestRepository = passwordChangeRequestRepository;
-        this.userPinRepository = userPinRepository;
-    }
 
     @Transactional(readOnly = true)
     public List<PendingRegistrationDto> getPendingRegistrations() {

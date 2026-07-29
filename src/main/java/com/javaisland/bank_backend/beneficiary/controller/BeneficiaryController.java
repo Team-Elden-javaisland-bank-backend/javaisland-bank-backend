@@ -3,8 +3,7 @@ package com.javaisland.bank_backend.beneficiary.controller;
 import com.javaisland.bank_backend.beneficiary.dto.BeneficiaryRequestDto;
 import com.javaisland.bank_backend.beneficiary.dto.BeneficiaryResponseDto;
 import com.javaisland.bank_backend.beneficiary.service.BeneficiaryService;
-import com.javaisland.bank_backend.exception.ApiBankException;
-import com.javaisland.bank_backend.user.repository.UserRepository;
+import com.javaisland.bank_backend.common.SecurityUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +21,7 @@ import java.util.List;
 public class BeneficiaryController {
 
     private final BeneficiaryService beneficiaryService;
-    private final UserRepository userRepository;
+    private final SecurityUtil securityUtil;
 
     @GetMapping
     public ResponseEntity<List<BeneficiaryResponseDto>> list(@AuthenticationPrincipal Jwt jwt) {
@@ -65,8 +64,6 @@ public class BeneficiaryController {
     }
 
     private Long getUserId(Jwt jwt) {
-        return userRepository.findByKeycloakId(jwt.getSubject())
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"))
-                .getId();
+        return securityUtil.getUserId(jwt);
     }
 }

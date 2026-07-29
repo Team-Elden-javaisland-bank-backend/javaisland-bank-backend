@@ -2,6 +2,7 @@ package com.javaisland.bank_backend.admin.controller;
 
 import com.javaisland.bank_backend.account.model.Account;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
+import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -68,7 +69,7 @@ public class AdminAccountController {
     public ResponseEntity<AdminAccountListItemDto> getAccountDetail(
             @PathVariable String accountNumber) {
         Account a = accountRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new RuntimeException("Account not found"));
+                .orElseThrow(() -> new ApiBankException("Account not found", "ACCOUNT_NOT_FOUND"));
         User user = a.getUser();
 
         var dto = new AdminAccountListItemDto();

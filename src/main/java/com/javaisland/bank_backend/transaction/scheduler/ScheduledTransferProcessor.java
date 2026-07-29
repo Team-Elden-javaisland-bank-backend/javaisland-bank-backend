@@ -13,7 +13,7 @@ public class ScheduledTransferProcessor {
 
     private final TransactionService transactionService;
 
-    @Scheduled(cron = "0 * * * * *")
+    @Scheduled(cron = "${app.scheduled.transfer-cron}")
     public void processPendingTransfers() {
         log.debug("Checking for pending transfers...");
         transactionService.executePendingTransfers();

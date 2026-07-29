@@ -5,9 +5,7 @@ import com.javaisland.bank_backend.auth.dto.LoginResponseDto;
 import com.javaisland.bank_backend.auth.dto.RegisterRequestDto;
 import com.javaisland.bank_backend.auth.service.KeycloakAdminService;
 import com.javaisland.bank_backend.auth.service.RegistrationService;
-import com.javaisland.bank_backend.user.model.RoleType;
 import com.javaisland.bank_backend.user.model.User;
-import com.javaisland.bank_backend.user.model.UserStatus;
 import com.javaisland.bank_backend.user.repository.RoleTypeRepository;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import com.javaisland.bank_backend.user.repository.UserStatusRepository;
@@ -17,13 +15,8 @@ import com.nimbusds.jwt.SignedJWT;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 
@@ -40,15 +33,6 @@ public class AuthController {
     private final RoleTypeRepository roleTypeRepository;
     private final UserStatusRepository userStatusRepository;
 
-    @Value("${keycloak.auth-server-url}")
-    private String keycloakAuthUrl;
-
-    @Value("${keycloak.realm}")
-    private String keycloakRealm;
-
-    @Value("${keycloak.client-id}")
-    private String keycloakClientId;
-
     @PostMapping("/register")
     public ResponseEntity<UserResponseDto> register(@Valid @RequestBody RegisterRequestDto requestDto) {
         return ResponseEntity.ok(registrationService.register(requestDto));
@@ -59,30 +43,10 @@ public class AuthController {
         User user = userRepository.findByUsername(request.getUsername()).orElse(null);
 
         try {
-            RestTemplate restTemplate = new RestTemplate();
-            String tokenUrl = keycloakAuthUrl + "/realms/" + keycloakRealm
-                    + "/protocol/openid-connect/token";
+            Map<String, Object> tokenResponse = keycloakAdminService.tokenLogin(
+                    request.getUsername(), request.getPassword());
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
-            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-            body.add("grant_type", "password");
-            body.add("client_id", keycloakClientId);
-            body.add("username", request.getUsername());
-            body.add("password", request.getPassword());
-
-            HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(body, headers);
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    tokenUrl, HttpMethod.POST, entity, Map.class);
-
-            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                throw new com.javaisland.bank_backend.exception.ApiBankException(
-                        "Autenticazione Keycloak fallita.", "INVALID_CREDENTIALS");
-            }
-
-            @SuppressWarnings("unchecked")
-            String keycloakToken = (String) response.getBody().get("access_token");
+            String keycloakToken = (String) tokenResponse.get("access_token");
 
             String keycloakId;
             try {
@@ -126,9 +90,6 @@ public class AuthController {
 
         } catch (com.javaisland.bank_backend.exception.ApiBankException e) {
             throw e;
-        } catch (HttpClientErrorException e) {
-            throw new com.javaisland.bank_backend.exception.ApiBankException(
-                    "Credenziali non valide.", "INVALID_CREDENTIALS");
         } catch (Exception e) {
             log.error("Keycloak login error: {}", e.getMessage());
             throw new com.javaisland.bank_backend.exception.ApiBankException(
@@ -136,7 +97,6 @@ public class AuthController {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private User syncKeycloakUserToDb(String keycloakId, String username) {
         var kcUsers = keycloakAdminService.getAllUsers();
         Map<String, Object> kcUser = kcUsers.stream()

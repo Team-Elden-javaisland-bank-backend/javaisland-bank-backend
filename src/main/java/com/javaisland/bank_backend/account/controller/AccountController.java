@@ -10,6 +10,7 @@ import com.javaisland.bank_backend.account.dto.OpenAccountRequestDto;
 import com.javaisland.bank_backend.account.dto.SetLimitRequestDto;
 import com.javaisland.bank_backend.account.service.AccountLimitService;
 import com.javaisland.bank_backend.account.service.AccountService;
+import com.javaisland.bank_backend.common.SecurityUtil;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -28,6 +29,7 @@ public class AccountController {
 
     private final AccountService accountService;
     private final AccountLimitService accountLimitService;
+    private final SecurityUtil securityUtil;
     private final UserRepository userRepository;
 
     @GetMapping
@@ -105,20 +107,15 @@ public class AccountController {
         return ResponseEntity.ok(accountLimitService.setLimitAsCustomer(userId, accountNumber, limitType, request));
     }
 
-    private Long getUserId(Jwt jwt) {
-        return userRepository.findByKeycloakId(jwt.getSubject())
-                .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException(
-                        "Utente non trovato.", "USER_NOT_FOUND"))
-                .getId();
-    }
-
     @PutMapping("/limits-setup-complete")
     public ResponseEntity<String> completeLimitsSetup(@AuthenticationPrincipal Jwt jwt) {
-        var user = userRepository.findByKeycloakId(jwt.getSubject())
-                .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException(
-                        "Utente non trovato.", "USER_NOT_FOUND"));
+        var user = securityUtil.getUser(jwt);
         user.setLimitsSetupComplete(true);
         userRepository.save(user);
         return ResponseEntity.ok("Setup completato.");
+    }
+
+    private Long getUserId(Jwt jwt) {
+        return securityUtil.getUserId(jwt);
     }
 }

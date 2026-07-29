@@ -33,19 +33,25 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
 
     List<Transaction> findByStatusIdAndScheduledDateLessThanEqual(Integer statusId, LocalDateTime scheduledDate);
 
+    List<Transaction> findByTypeIdAndCreatedAtAfter(Integer typeId, LocalDateTime since, Pageable pageable);
+
+    List<Transaction> findByCreatedAtAfter(LocalDateTime since, Pageable pageable);
+
     @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
            "WHERE t.destinationAccount.id = :accountId " +
-           "AND t.statusId = 2 " +
+           "AND t.statusId = :statusId " +
            "AND t.createdAt BETWEEN :start AND :end")
     BigDecimal sumInflowByAccountBetween(@Param("accountId") Long accountId,
+                                         @Param("statusId") Integer statusId,
                                          @Param("start") LocalDateTime start,
                                          @Param("end") LocalDateTime end);
 
     @Query("SELECT COUNT(t) FROM Transaction t " +
            "WHERE (t.sourceAccount.id = :accountId OR t.destinationAccount.id = :accountId) " +
-           "AND t.statusId = 2 " +
+           "AND t.statusId = :statusId " +
            "AND t.createdAt BETWEEN :start AND :end")
     Long countByAccountBetween(@Param("accountId") Long accountId,
+                               @Param("statusId") Integer statusId,
                                @Param("start") LocalDateTime start,
                                @Param("end") LocalDateTime end);
 }

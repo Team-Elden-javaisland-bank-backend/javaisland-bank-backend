@@ -14,12 +14,17 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 @Slf4j
 public class KeycloakAdminService {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+
+    public KeycloakAdminService(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
 
     @Value("${keycloak.auth-server-url}")
     private String keycloakAuthUrl;
@@ -27,12 +32,46 @@ public class KeycloakAdminService {
     @Value("${keycloak.realm}")
     private String keycloakRealm;
 
+    @Value("${keycloak.client-id}")
+    private String clientId;
+
     @Value("${keycloak.admin-username}")
     private String adminUsername;
 
     @Value("${keycloak.admin-password}")
     private String adminPassword;
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public Map<String, Object> tokenLogin(String username, String password) {
+        String tokenUrl = keycloakAuthUrl + "/realms/" + keycloakRealm
+                + "/protocol/openid-connect/token";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("grant_type", "password");
+        body.add("client_id", clientId);
+        body.add("username", username);
+        body.add("password", password);
+
+        HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(body, headers);
+
+        try {
+            ResponseEntity<Map<String, Object>> response = (ResponseEntity) restTemplate.exchange(
+                    tokenUrl, HttpMethod.POST, entity, Map.class);
+
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                throw new ApiBankException("Autenticazione Keycloak fallita.", "INVALID_CREDENTIALS");
+            }
+
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            throw new ApiBankException("Credenziali non valide.", "INVALID_CREDENTIALS");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
     private String getAdminToken() {
         String tokenUrl = keycloakAuthUrl + "/realms/master/protocol/openid-connect/token";
 
@@ -46,13 +85,15 @@ public class KeycloakAdminService {
         body.add("grant_type", "password");
 
         HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<Map> response = restTemplate.exchange(tokenUrl, HttpMethod.POST, entity, Map.class);
+        var response = restTemplate.exchange(tokenUrl, HttpMethod.POST, entity, Map.class);
 
         if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
             throw new ApiBankException("Impossibile autenticarsi come admin Keycloak.", "KEYCLOAK_ADMIN_AUTH_FAILED");
         }
 
-        return (String) response.getBody().get("access_token");
+        @SuppressWarnings("unchecked")
+        var token = (String) response.getBody().get("access_token");
+        return token;
     }
 
     public String createUser(String username, String password, String email, String firstName, String lastName, boolean enabled) {
@@ -131,6 +172,7 @@ public class KeycloakAdminService {
         assignRealmRole(keycloakId, roleName, adminToken);
     }
 
+    @SuppressWarnings("unchecked")
     private void assignRealmRole(String keycloakId, String roleName, String adminToken) {
         String roleUrl = keycloakAuthUrl + "/admin/realms/" + keycloakRealm + "/roles/" + roleName;
 
@@ -139,7 +181,7 @@ public class KeycloakAdminService {
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         HttpEntity<Void> getEntity = new HttpEntity<>(headers);
-        ResponseEntity<Map> roleResponse = restTemplate.exchange(roleUrl, HttpMethod.GET, getEntity, Map.class);
+        ResponseEntity<Map<String, Object>> roleResponse = (ResponseEntity) restTemplate.exchange(roleUrl, HttpMethod.GET, getEntity, Map.class);
 
         if (!roleResponse.getStatusCode().is2xxSuccessful() || roleResponse.getBody() == null) {
             log.warn("Cannot assign role {}: role not found in Keycloak", roleName);
@@ -231,7 +273,7 @@ public class KeycloakAdminService {
         headers.setBearerAuth(adminToken);
 
         HttpEntity<Void> entity = new HttpEntity<>(headers);
-        ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, entity, List.class);
+        var response = restTemplate.exchange(url, HttpMethod.GET, entity, List.class);
 
         if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
             return response.getBody();

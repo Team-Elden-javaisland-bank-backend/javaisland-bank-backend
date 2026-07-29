@@ -1,16 +1,11 @@
 package com.javaisland.bank_backend.user.controller;
 
-import com.javaisland.bank_backend.account.model.Account;
-import com.javaisland.bank_backend.account.model.LimitChangeRequest;
+import com.javaisland.bank_backend.account.model.AccountStatus;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.account.repository.LimitChangeRequestRepository;
-import com.javaisland.bank_backend.card.model.Card;
-import com.javaisland.bank_backend.card.repository.CardRepository;
+import com.javaisland.bank_backend.common.SecurityUtil;
 import com.javaisland.bank_backend.user.dto.CustomerRequestDto;
-import com.javaisland.bank_backend.user.dto.PasswordChangeRequestDto;
-import com.javaisland.bank_backend.user.model.PasswordChangeRequest;
 import com.javaisland.bank_backend.user.repository.PasswordChangeRequestRepository;
-import com.javaisland.bank_backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,13 +28,11 @@ public class CustomerRequestController {
     private final PasswordChangeRequestRepository passwordChangeRequestRepository;
     private final LimitChangeRequestRepository limitChangeRequestRepository;
     private final AccountRepository accountRepository;
-    private final CardRepository cardRepository;
-    private final UserRepository userRepository;
+    private final SecurityUtil securityUtil;
 
     @GetMapping
     public ResponseEntity<List<CustomerRequestDto>> getMyRequests(@AuthenticationPrincipal Jwt jwt) {
-        Long userId = userRepository.findByKeycloakId(jwt.getSubject())
-                .orElseThrow().getId();
+        Long userId = securityUtil.getUserId(jwt);
 
         List<CustomerRequestDto> all = new ArrayList<>();
 
@@ -63,9 +56,9 @@ public class CustomerRequestController {
                         .processedAt(req.getProcessedAt())
                         .build()));
 
-        accountRepository.findByUserId(userId)
+                accountRepository.findByUserId(userId)
                 .forEach(acc -> {
-                    if (acc.getStatusId() == 1) {
+                    if (acc.getStatusId() == AccountStatus.INACTIVE) {
                         all.add(CustomerRequestDto.builder()
                                 .id(acc.getId())
                                 .type("ACCOUNT_OPENING")
@@ -73,7 +66,7 @@ public class CustomerRequestController {
                                 .description("Apertura conto in attesa di approvazione — IBAN: " + acc.getAccountNumber())
                                 .createdAt(acc.getCreatedAt())
                                 .build());
-                    } else if (acc.getStatusId() == 3) {
+                    } else if (acc.getStatusId() == AccountStatus.FROZEN) {
                         if (acc.getClosureRequestedAt() != null) {
                             all.add(CustomerRequestDto.builder()
                                     .id(acc.getId())
@@ -91,7 +84,7 @@ public class CustomerRequestController {
                                     .createdAt(acc.getCreatedAt())
                                     .build());
                         }
-                    } else if (acc.getStatusId() == 4) {
+                    } else if (acc.getStatusId() == AccountStatus.CLOSED) {
                         all.add(CustomerRequestDto.builder()
                                 .id(acc.getId())
                                 .type("ACCOUNT_CLOSURE")
@@ -100,7 +93,7 @@ public class CustomerRequestController {
                                 .createdAt(acc.getCreatedAt())
                                 .processedAt(acc.getClosedAt())
                                 .build());
-                    } else if (acc.getStatusId() == 2 && acc.getClosureRejectedAt() != null) {
+                    } else if (acc.getStatusId() == AccountStatus.ACTIVE && acc.getClosureRejectedAt() != null) {
                         all.add(CustomerRequestDto.builder()
                                 .id(acc.getId())
                                 .type("ACCOUNT_CLOSURE")

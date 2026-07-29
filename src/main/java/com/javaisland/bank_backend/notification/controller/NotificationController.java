@@ -1,14 +1,14 @@
 package com.javaisland.bank_backend.notification.controller;
 
+import com.javaisland.bank_backend.common.SecurityUtil;
 import com.javaisland.bank_backend.notification.dto.NotificationDto;
 import com.javaisland.bank_backend.notification.service.NotificationService;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-import com.javaisland.bank_backend.user.repository.UserRepository;
 
 import java.util.List;
 import java.util.Locale;
@@ -20,12 +20,12 @@ import java.util.Map;
 public class NotificationController {
 
     private final NotificationService notificationService;
-    private final UserRepository userRepository;
+    private final SecurityUtil securityUtil;
 
     @GetMapping
-    public ResponseEntity<List<NotificationDto>> getNotifications(@AuthenticationPrincipal Jwt jwt, HttpServletRequest request) {
+    public ResponseEntity<List<NotificationDto>> getNotifications(@AuthenticationPrincipal Jwt jwt) {
         Long userId = getUserId(jwt);
-        Locale locale = resolveLocale(request);
+        Locale locale = LocaleContextHolder.getLocale();
         return ResponseEntity.ok(notificationService.getNotifications(userId, locale));
     }
 
@@ -47,22 +47,7 @@ public class NotificationController {
         return ResponseEntity.ok().build();
     }
 
-    private Locale resolveLocale(HttpServletRequest request) {
-        String acceptLanguage = request.getHeader("Accept-Language");
-        if (acceptLanguage != null && !acceptLanguage.isBlank()) {
-            try {
-                return Locale.forLanguageTag(acceptLanguage.split(",")[0].trim());
-            } catch (Exception e) {
-                // fallback to Italian
-            }
-        }
-        return Locale.ITALIAN;
-    }
-
     private Long getUserId(Jwt jwt) {
-        String keycloakId = jwt.getSubject();
-        return userRepository.findByKeycloakId(keycloakId)
-                .map(user -> user.getId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        return securityUtil.getUserId(jwt);
     }
 }

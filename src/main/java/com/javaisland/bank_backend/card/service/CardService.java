@@ -41,10 +41,12 @@ public class CardService {
         this.notificationService = notificationService;
     }
 
+    @Transactional
     public Card issueDebitCard(Long accountId, String holderName) {
         return issueDebitCard(accountId, holderName, "INACTIVE");
     }
 
+    @Transactional
     public Card issueDebitCard(Long accountId, String holderName, String statusName) {
         var debitType = cardTypeRepository.findByTypeName("DEBIT")
                 .orElseThrow(() -> new ApiBankException("Tipo carta DEBIT non configurato."));
@@ -57,7 +59,7 @@ public class CardService {
         card.setCardType(debitType);
         card.setStatus(status);
         card.setExpirationDate(LocalDate.now().plusYears(5));
-        card.setCvv(String.format("%03d", random.nextInt(1000)));
+        card.setCvv(String.format("%03d", random.nextInt(900) + 100));
         card.setCardNumber(generateUniqueCardNumber());
 
         return cardRepository.save(card);
@@ -114,6 +116,7 @@ public class CardService {
         });
     }
 
+    @Transactional
     public Card updateCardStatus(Long cardId, String newStatusName) {
         Card card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new ApiBankException("Carta non trovata con questo ID."));
@@ -248,12 +251,27 @@ public class CardService {
         String generatedNumber;
         do {
             StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 16; i++) {
+            for (int i = 0; i < 15; i++) {
                 sb.append(random.nextInt(10));
             }
-            generatedNumber = sb.toString();
+            generatedNumber = sb.toString() + luhnCheckDigit(sb.toString());
         } while (cardRepository.findByCardNumber(generatedNumber).isPresent());
 
         return generatedNumber;
+    }
+
+    private String luhnCheckDigit(String digits) {
+        int sum = 0;
+        boolean alternate = true;
+        for (int i = digits.length() - 1; i >= 0; i--) {
+            int n = digits.charAt(i) - '0';
+            if (alternate) {
+                n *= 2;
+                if (n > 9) n -= 9;
+            }
+            sum += n;
+            alternate = !alternate;
+        }
+        return String.valueOf((10 - (sum % 10)) % 10);
     }
 }

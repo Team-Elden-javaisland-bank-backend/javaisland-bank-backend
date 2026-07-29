@@ -1,5 +1,6 @@
 package com.javaisland.bank_backend.user.controller;
 
+import com.javaisland.bank_backend.common.SecurityUtil;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.repository.UserRepository;
@@ -27,6 +28,7 @@ import java.util.UUID;
 @Slf4j
 public class ProfilePictureController {
 
+    private final SecurityUtil securityUtil;
     private final UserRepository userRepository;
 
     @Value("${app.upload.dir:uploads/profile-pictures}")
@@ -55,8 +57,7 @@ public class ProfilePictureController {
             throw new ApiBankException("File troppo grande. Massimo 5 MB.", "FILE_TOO_LARGE");
         }
 
-        User user = userRepository.findByKeycloakId(jwt.getSubject())
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+        User user = securityUtil.getUser(jwt);
 
         Path dirPath = Paths.get(uploadDir).toAbsolutePath();
         Files.createDirectories(dirPath);
@@ -81,8 +82,7 @@ public class ProfilePictureController {
 
     @DeleteMapping
     public ResponseEntity<?> delete(@AuthenticationPrincipal Jwt jwt) {
-        User user = userRepository.findByKeycloakId(jwt.getSubject())
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+        User user = securityUtil.getUser(jwt);
 
         if (user.getProfilePictureUrl() != null) {
             deleteOldPicture(user.getProfilePictureUrl());

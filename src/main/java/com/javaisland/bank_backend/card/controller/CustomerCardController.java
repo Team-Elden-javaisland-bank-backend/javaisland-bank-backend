@@ -3,7 +3,7 @@ package com.javaisland.bank_backend.card.controller;
 import com.javaisland.bank_backend.card.dto.CardResponseDto;
 import com.javaisland.bank_backend.card.dto.CardSensitiveDto;
 import com.javaisland.bank_backend.card.service.CardService;
-import com.javaisland.bank_backend.user.repository.UserRepository;
+import com.javaisland.bank_backend.common.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,7 +20,7 @@ import java.util.List;
 public class CustomerCardController {
 
     private final CardService cardService;
-    private final UserRepository userRepository;
+    private final SecurityUtil securityUtil;
 
     @GetMapping
     public ResponseEntity<List<CardResponseDto>> listMyCards(@AuthenticationPrincipal Jwt jwt) {
@@ -43,9 +43,6 @@ public class CustomerCardController {
     }
 
     private Long getUserId(Jwt jwt) {
-        return userRepository.findByKeycloakId(jwt.getSubject())
-                .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException(
-                        "Utente non trovato.", "USER_NOT_FOUND"))
-                .getId();
+        return securityUtil.getUserId(jwt);
     }
 }

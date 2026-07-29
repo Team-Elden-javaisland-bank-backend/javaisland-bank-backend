@@ -1,13 +1,11 @@
 package com.javaisland.bank_backend.user.controller;
 
-import com.javaisland.bank_backend.account.model.Account;
 import com.javaisland.bank_backend.account.model.AccountStatus;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.card.service.CardService;
-import com.javaisland.bank_backend.exception.ApiBankException;
+import com.javaisland.bank_backend.common.SecurityUtil;
 import com.javaisland.bank_backend.user.dto.CustomerProfileDto;
 import com.javaisland.bank_backend.user.model.User;
-import com.javaisland.bank_backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,14 +21,13 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('C')")
 public class CustomerProfileController {
 
-    private final UserRepository userRepository;
+    private final SecurityUtil securityUtil;
     private final AccountRepository accountRepository;
     private final CardService cardService;
 
     @GetMapping
     public ResponseEntity<CustomerProfileDto> getMyProfile(@AuthenticationPrincipal Jwt jwt) {
-        User user = userRepository.findByKeycloakId(jwt.getSubject())
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+        User user = securityUtil.getUser(jwt);
 
         var accounts = accountRepository.findByUserId(user.getId());
         int totalAccounts = accounts.size();
@@ -93,10 +90,10 @@ public class CustomerProfileController {
     private String getStatusName(Integer statusId) {
         if (statusId == null) return "SCONOSCIUTO";
         return switch (statusId) {
-            case 1 -> "INATTIVO";
-            case 2 -> "ATTIVO";
-            case 3 -> "CONGELATO";
-            case 4 -> "CHIUSO";
+            case AccountStatus.INACTIVE -> "INATTIVO";
+            case AccountStatus.ACTIVE -> "ATTIVO";
+            case AccountStatus.FROZEN -> "CONGELATO";
+            case AccountStatus.CLOSED -> "CHIUSO";
             default -> "SCONOSCIUTO";
         };
     }

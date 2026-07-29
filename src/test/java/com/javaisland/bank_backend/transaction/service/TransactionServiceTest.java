@@ -5,7 +5,9 @@ import com.javaisland.bank_backend.account.model.AccountStatus;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.account.service.AccountLimitService;
 import com.javaisland.bank_backend.beneficiary.service.BeneficiaryService;
+import com.javaisland.bank_backend.common.SecurityUtil;
 import com.javaisland.bank_backend.exception.ApiBankException;
+import com.javaisland.bank_backend.notification.service.NotificationService;
 import com.javaisland.bank_backend.transaction.dto.TransferRequestDto;
 import com.javaisland.bank_backend.transaction.model.Transaction;
 import com.javaisland.bank_backend.transaction.model.TransactionStatus;
@@ -39,6 +41,8 @@ class TransactionServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private BeneficiaryService beneficiaryService;
     @Mock private AccountLimitService accountLimitService;
+    @Mock private NotificationService notificationService;
+    @Mock private SecurityUtil securityUtil;
 
     @InjectMocks private TransactionService transactionService;
 
@@ -166,8 +170,6 @@ class TransactionServiceTest {
         when(transactionStatusRepository.findByStatusName("PENDING"))
                 .thenReturn(Optional.of(new TransactionStatus(1, "PENDING")));
 
-        User user = new User(); user.setId(10L);
-
         Account src = createAccount(1L, "IT1", new BigDecimal("1000"), AccountStatus.ACTIVE, 10L);
         Account dst = createAccount(2L, "IT2", new BigDecimal("500"), AccountStatus.ACTIVE, 20L);
 
@@ -179,7 +181,6 @@ class TransactionServiceTest {
 
         when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(src));
         when(accountRepository.findByAccountNumber("IT2")).thenReturn(Optional.of(dst));
-        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         var result = transactionService.transfer(10L, dto);
@@ -194,8 +195,6 @@ class TransactionServiceTest {
         when(transactionStatusRepository.findByStatusName("PENDING"))
                 .thenReturn(Optional.of(new TransactionStatus(1, "PENDING")));
 
-        User user = new User(); user.setId(10L);
-
         Account src = createAccount(1L, "IT1", new BigDecimal("1000"), AccountStatus.ACTIVE, 10L);
         Account dst = createAccount(2L, "IT2", new BigDecimal("500"), AccountStatus.ACTIVE, 20L);
 
@@ -208,7 +207,6 @@ class TransactionServiceTest {
         when(beneficiaryService.resolveAccountNumber(10L, 99L)).thenReturn("IT2");
         when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(src));
         when(accountRepository.findByAccountNumber("IT2")).thenReturn(Optional.of(dst));
-        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         var result = transactionService.transfer(10L, dto);
@@ -243,7 +241,6 @@ class TransactionServiceTest {
         when(transactionStatusRepository.findByStatusName("COMPLETED"))
                 .thenReturn(Optional.of(new TransactionStatus(2, "COMPLETED")));
 
-        User user = new User(); user.setId(10L);
         Account acc = createAccount(1L, "IT1", new BigDecimal("500"), AccountStatus.ACTIVE, 10L);
 
         var request = new com.javaisland.bank_backend.transaction.dto.TransactionRequestDto();
@@ -251,7 +248,6 @@ class TransactionServiceTest {
         request.setAmount(new BigDecimal("200"));
 
         when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(acc));
-        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         transactionService.deposit(10L, request);
@@ -266,7 +262,6 @@ class TransactionServiceTest {
         when(transactionStatusRepository.findByStatusName("COMPLETED"))
                 .thenReturn(Optional.of(new TransactionStatus(2, "COMPLETED")));
 
-        User user = new User(); user.setId(10L);
         Account acc = createAccount(1L, "IT1", new BigDecimal("1000"), AccountStatus.ACTIVE, 10L);
 
         var request = new com.javaisland.bank_backend.transaction.dto.TransactionRequestDto();
@@ -274,7 +269,6 @@ class TransactionServiceTest {
         request.setAmount(new BigDecimal("400"));
 
         when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(acc));
-        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         transactionService.withdraw(10L, request);
@@ -289,7 +283,6 @@ class TransactionServiceTest {
         when(transactionStatusRepository.findByStatusName("COMPLETED"))
                 .thenReturn(Optional.of(new TransactionStatus(2, "COMPLETED")));
 
-        User user = new User(); user.setId(10L);
         Account acc = createAccount(1L, "IT1", new BigDecimal("100"), AccountStatus.ACTIVE, 10L);
 
         var request = new com.javaisland.bank_backend.transaction.dto.TransactionRequestDto();
@@ -297,7 +290,6 @@ class TransactionServiceTest {
         request.setAmount(new BigDecimal("500"));
 
         when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(acc));
-        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
 
         assertThrows(ApiBankException.class, () -> transactionService.withdraw(10L, request));
     }
