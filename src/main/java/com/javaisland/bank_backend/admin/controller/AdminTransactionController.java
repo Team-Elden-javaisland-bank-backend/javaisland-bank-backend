@@ -1,7 +1,11 @@
 package com.javaisland.bank_backend.admin.controller;
 
 import com.javaisland.bank_backend.transaction.model.Transaction;
+import com.javaisland.bank_backend.transaction.model.TransactionStatus;
+import com.javaisland.bank_backend.transaction.model.TransactionType;
 import com.javaisland.bank_backend.transaction.repository.TransactionRepository;
+import com.javaisland.bank_backend.transaction.repository.TransactionStatusRepository;
+import com.javaisland.bank_backend.transaction.repository.TransactionTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.Data;
 import org.springframework.data.domain.PageRequest;
@@ -21,6 +25,8 @@ import java.util.List;
 public class AdminTransactionController {
 
     private final TransactionRepository transactionRepository;
+    private final TransactionTypeRepository transactionTypeRepository;
+    private final TransactionStatusRepository transactionStatusRepository;
 
     @Data
     public static class AdminTransactionListItemDto {
@@ -28,6 +34,8 @@ public class AdminTransactionController {
         private BigDecimal amount;
         private Integer typeId;
         private Integer statusId;
+        private String typeName;
+        private String statusName;
         private String description;
         private String sourceAccountNumber;
         private String destinationAccountNumber;
@@ -56,6 +64,10 @@ public class AdminTransactionController {
             dto.setAmount(t.getAmount());
             dto.setTypeId(t.getTypeId());
             dto.setStatusId(t.getStatusId());
+            dto.setTypeName(transactionTypeRepository.findById(t.getTypeId())
+                    .map(TransactionType::getTypeName).orElse(null));
+            dto.setStatusName(transactionStatusRepository.findById(t.getStatusId())
+                    .map(TransactionStatus::getStatusName).orElse(null));
             dto.setDescription(t.getDescription());
             dto.setSourceAccountNumber(t.getSourceAccount() != null
                     ? t.getSourceAccount().getAccountNumber() : null);

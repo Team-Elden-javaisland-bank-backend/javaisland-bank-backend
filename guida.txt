@@ -1,102 +1,59 @@
-Ecco il piano completo. **4 macro-aree**, ognuna con file coinvolti e cosa fare.
+Valutazione backend.
+
+## Voto complessivo: 6/10
 
 ---
 
-## PIANO REFACTORING
+### PUNTI DI FORZA (+)
 
-### 1. Unione `saved_beneficiaries` → `beneficiaries`
+| Criterio | Voto | Note |
+|---|---|---|
+| Architettura a strati | 7 | Controller Service Repository pulito |
+| Security/Auth | 7 | Keycloak + JWT + @PreAuthorize + @Version ottimistico |
+| Exception handling | 7 | GlobalExceptionHandler + ApiBankException + i18n message source |
+| DTO usage | 7 | Entità non esposte direttamente |
+| Lombok | 8 | Boilerplate ridotto |
+| Audit logging | 7 | AuditLogService presente |
+| DataInitializer | 8 | Seed data automatizzato |
+| Swagger | 7 | OpenAPI integrato |
 
-**Cosa**: la tabella `saved_beneficiaries` ha solo `beneficiary_name` in piu, il resto e identico. Unisco in `beneficiaries` aggiungendo colonna `beneficiary_name`, elimino intero package e tutte le route.
+### PUNTI DEBOLI (-)
 
-**Files BACKEND da modificare:**
-- `beneficiary/model/Beneficiary.java` — aggiungi campo `beneficiaryName` (nullable, per beneficiari esterni)
-- `beneficiary/dto/BeneficiaryRequestDto.java` — aggiungi campo `beneficiaryName` opzionale
-- `beneficiary/dto/BeneficiaryResponseDto.java` — aggiungi `beneficiaryName`
-- `beneficiary/service/BeneficiaryService.java` — integra logica `SavedBeneficiaryService` (accetta IBAN esterni, nessun controllo esistenza conto)
-- `beneficiary/controller/BeneficiaryController.java` — aggiungi endpoint per beneficiari esterni? No, stesso endpoint unificato
-- `beneficiary/repository/BeneficiaryRepository.java` — nessuna modifica necessaria
-
-**Files da ELIMINARE (intero package `savedbeneficiary/`):**
-- `savedbeneficiary/model/SavedBeneficiary.java`
-- `savedbeneficiary/dto/SavedBeneficiaryRequestDto.java`
-- `savedbeneficiary/dto/SavedBeneficiaryResponseDto.java`
-- `savedbeneficiary/repository/SavedBeneficiaryRepository.java`
-- `savedbeneficiary/service/SavedBeneficiaryService.java`
-- `savedbeneficiary/controller/SavedBeneficiaryController.java`
-
-**Files FRONTEND da modificare:**
-- `core/models/beneficiary/` — aggiorna interfacce con `beneficiaryName`
-- `core/models/saved-beneficiary/` — ELIMINA cartella
-- `core/services/customer.service.ts` — unisci metodi `savedBeneficiary*` in `beneficiary*`, aggiorna URL endpoint
-- `pages/customer/customer-beneficiaries.*` — integra visualizzazione beneficiari salvati
-- `pages/customer/customer-saved-beneficiaries.*` — ELIMINA componente
-
----
-
-### 2. Rimozione `new_plain_password` da `PasswordChangeRequest`
-
-**Cosa**: la password in chiaro e una vulnerabilita grave. Sostituisco con `token_hash` (hash dell'UUID inviato al richiedente). Alternativa: uso direttamente Keycloak password reset API (invia email). Opzione pragmatica: genero token UUID, salvo hash, mostro token al frontend, dipendente lo usa per approvare.
-
-**Files BACKEND:**
-- `user/model/PasswordChangeRequest.java` — rimuovi `newPlainPassword` (sicurezza: nessuna password in DB), aggiungi `@ManyToOne` user
-- `user/dto/PasswordChangeRequestDto.java` — rimuovi `newPlainPassword`
-- `user/dto/PasswordChangeRequestCreateDto.java` — non più usato (customer non invia password)
-- `user/service/PasswordChangeService.java` — `requestPasswordChange()` senza password; `approveRequest(Long requestId, String newPassword)` invia a Keycloak via `keycloakAdminService.resetPassword()`
-- `user/controller/PasswordChangeController.java` — `requestPasswordChange()` senza body
-- `employee/controller/EmployeeUserController.java` — approve endpoint accetta `{"newPassword": "..."}`
-
-**Files FRONTEND:**
-- Modelli `password-change-request` — aggiorna DTO
-- `customer-requests.html` / `.ts` — aggiorna vista se mostrava nuova password
+| Criterio | Voto | Problemi |
+|---|---|---|
+| Test | 2 | Solo 3 file test (AccountLimit, Beneficiary, Transaction). 0 test per auth, admin, user, card, etc. |
+| i18n lacunosa | 4 | EmployeeUserController e EmployeeCardController ritornano stringhe italiane hardcoded: Registrazione validata, conto attivato. / Carta bloccata con successo.  zero i18n. AccountService.getStatusName() + CustomerProfileController ritornano INATTIVO, ATTIVO hardcoded. Alert @Adult + CreateEmployeeRequestDto hanno messaggi in italiano. |
+| N+1 queries | 3 | AdminTransactionController.findAll() chiama findById() in loop per tipo/stato di ogni transazione |
+| DTO in controller | 4 | AdminTransactionListItemDto = classe interna del controller |
+| API URL inconsistente | 4 | /api/v1/... vs /pin/setup vs /api/users/export vs /api/cards/... |
+| Nessuna paginazione | 4 | Admin lists (clienti, impiegati, conti) ritornano tutto in unbounded list |
+| God Class | 4 | AccountService fa tutto: operazioni cliente, dipendente, chiusure, freeze, status |
+| Business logic in controller | 5 | AuthController.keycloakLogin() ha logica di stato utente, JWT parsing, user sync |
+| Rate limiting | 1 | Nessuna protezione su login/register |
+| Caching | 2 | Nessun @Cacheable per lookup data (tipi transazione, status) |
+| RuntimeException in IbanGenerator | 5 | Dovrebbe lanciare ApiBankException |
+| CORS sparso | 5 | @CrossOrigin sui controller invece di configurazione globale |
+| SecurityUtil statico | 5 | Non mockabile nei test |
+| Profile pics su filesystem | 5 | Nessun cleanup, nessun object storage |
 
 ---
 
-### 3. `LocalDateTime` → `OffsetDateTime` (timestamptz)
+### RIEPILOGO PER MACRO-AREA
 
-**Cosa**: tutti i campi data/ora diventano `OffsetDateTime` in Java, `timestamptz` su DB. Questo coinvolge ~10 entita e ~20 DTO.
+| Area | Voto | Giudizio |
+|---|---|---|
+| Architettura | 7/10 | Solida impalcatura a strati, ma alcune responsabilità contorte (AccountService, AuthController) |
+| Codice | 5/10 | Metà file puliti, metà con stringhe italiane, N+1, DTO annidati |
+| Testing | 2/10 | Insufficiente per un sistema bancario |
+| Performance | 5/10 | N+1, no cache, no paginazione admin |
+| Manutenibilità | 6/10 | Buona struttura base ma i18n incompleta e inconsistenza url creano debito tecnico |
 
-**Entities** (cambiare `LocalDateTime` → `OffsetDateTime`, `@CreationTimestamp` → verificarne compatibilita):
-- `Account.java` — `createdAt`, `closedAt`, `closureRequestedAt`, `closureRejectedAt`
-- `AccountLimit.java` — `updatedAt`
-- `Transaction.java` — `createdAt`, `scheduledDate`
-- `User.java` — `createdAt`, `passwordChangedAt`
-- `UserPin.java` — `createdAt`
-- `PasswordChangeRequest.java` — `createdAt`, `processedAt`
-- `Notification.java` — `createdAt`
-- `AuditLog.java` — `performedAt`
-- `Beneficiary.java` — `createdAt`
-- `LimitChangeRequest.java` — `createdAt`, `processedAt`
+### COSA ABBASSA IL VOTO (quick win per salire a 7+)
 
-**DTOs con LocalDateTime:**
-- `AccountResponseDto`, `TransactionResponseDto`, `BeneficiaryResponseDto`, `PasswordChangeRequestDto`, `EmployeeRequestDto`, `NotificationDto`, `AuditLogDto`, `MonthlySummaryDto`, `CustomerRequestDto`, `LimitChangeRequest`, `EmployeeUserDetailDto`
-
-**Services con date logic:**
-- `TransactionService.java` — query intervallo date, scheduled transfer comparison
-- `ScheduledTransferProcessor.java` — confronto scheduledDate
-- `AccountService.java` — closure timestamps
-- `PasswordChangeService.java` — date handling
-- `NotificationService.java` — date handling
-
----
-
-### 4. FK esplicite per `notifications`, `audit_logs`, `password_change_requests`
-
-**Cosa**: aggiungere `@ManyToOne` + `@JoinColumn` dove ora c'e solo un `Long userId` implicito. Questo da integrita referenziale JPA e permette join espliciti.
-
-**Entities:**
-- `Notification.java` — cambia `private Long userId` → `@ManyToOne @JoinColumn User user`
-- `AuditLog.java` — cambia `private Long performedByUserId` → `@ManyToOne @JoinColumn User performedBy`
-- `PasswordChangeRequest.java` — cambia `private Long userId` → `@ManyToOne @JoinColumn User user`
-- `Card.java` — cambia `private Long accountId` → `@ManyToOne @JoinColumn Account account`
-- `Transaction.java` — aggiungi `@ManyToOne` per `typeId` e `statusId`
-- `Account.java` — aggiungi `@ManyToOne` per `statusId` → `AccountStatus`
-
----
-
-**RIEPILOGO**: ~50 file backend + ~10 file frontend. Ordine esecuzione consigliato:
-1. FK esplicite (4) — cambi localizzati, basso rischio
-2. `OffsetDateTime` (3) — massiccio ma meccanico, molti file
-3. Password token (2) — richiede attenzione al flusso
-4. Unione beneficiaries (1) — elimina intero package
-
-**Procedo?** Se si, dimmi se vuoi che esegua tutto in una volta o area per area. In ogni caso, dopo ogni area faccio `mvn compile` + `npm build` per verificare.
+1. i18n completa: EmployeeUserController (4 stringhe), EmployeeCardController (2 stringhe), AccountService.getStatusName(), CustomerProfileController status  usare error code o MessageSource
+2. N+1 fix: AdminTransactionController  join query con @EntityGraph o fetch join
+3. Paginazione: Admin endpoint per clienti/impiegati/conti
+4. Test: Almeno service layer tests per auth flow, card flow, employee flow
+5. DTO separati: Estrarre AdminTransactionListItemDto in file proprio
+6. Uniformare URL: Tutto sotto /api/v1/
+7. Rate limiting: Spring Boot + bucket4j o similare su /auth/**

@@ -1,94 +1,109 @@
-// ELDENBANK - Database Schema
+// ELDENBANK - Database Schema (completo e aggiornato)
 // Source: JPA entity annotations + DataInitializer seed values
-// Schema managed via Hibernate ddl-auto:update (no Flyway)
+// Schema managed via Hibernate ddl-auto:update (NON Flyway)
+// Database: PostgreSQL 15
 
-// ═══════════════════════════════════════════════
-// LOOKUP TABLES (auto-seeded by DataInitializer)
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOOKUP TABLES (auto-seeded by DataInitializer at first startup)
+// ═══════════════════════════════════════════════════════════════════════════════
 
 Table role_types {
   id integer [primary key, increment]
-  role_name varchar(30) [unique, not null]          // C, D, A
+  role_name varchar(30) [unique, not null]              // "C"=Cliente, "D"=Dipendente, "A"=Admin
+  // Seed: C(1), D(2), A(3)
 }
 
 Table user_statuses {
   id integer [primary key, increment]
-  user_status varchar(30) [unique, not null]         // PENDING, ACTIVE, ANNULLED, SUSPENDED
+  user_status varchar(30) [unique, not null]            // PENDING, ACTIVE, ANNULLED, SUSPENDED
+  // Seed: PENDING(1), ACTIVE(2), ANNULLED(3), SUSPENDED(4)
 }
 
 Table account_statuses {
   id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]         // INACTIVE, ACTIVE, FROZEN, CLOSED
+  status_name varchar(30) [unique, not null]            // INACTIVE, ACTIVE, FROZEN, CLOSED
+  // Seed: INACTIVE(1), ACTIVE(2), FROZEN(3), CLOSED(4)
 }
 
 Table card_types {
   id integer [primary key, increment]
-  type_name varchar(30) [unique, not null]           // DEBIT
+  type_name varchar(30) [unique, not null]              // DEBIT
+  // Seed: DEBIT(1)
 }
 
 Table card_statuses {
   id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]         // INACTIVE, ACTIVE, BLOCKED, CLOSED
+  status_name varchar(30) [unique, not null]            // INACTIVE, ACTIVE, BLOCKED, CLOSED
+  // Seed: INACTIVE(1), ACTIVE(2), BLOCKED(3), CLOSED(4)
 }
 
 Table limit_types {
   id integer [primary key, increment]
-  limit_name varchar(30) [unique, not null]          // DAILY_TRANSFER, SINGLE_TRANSFER, etc.
+  limit_name varchar(30) [unique, not null]
   notes varchar(255)
-  change_policy varchar(20) [not null]               // USER_FULL, USER_LOWER_ONLY, BANK_ONLY
+  change_policy varchar(20) [not null, enum: USER_FULL, USER_LOWER_ONLY, BANK_ONLY]
+  // Seed:
+  //   DAILY_TRANSFER(1)       - USER_LOWER_ONLY
+  //   SINGLE_TRANSFER(2)      - USER_LOWER_ONLY
+  //   INSTANT_TRANSFER_SINGLE(3) - BANK_ONLY
+  //   MONTHLY_TRANSFER(4)     - BANK_ONLY
+  //   ATM_WITHDRAWAL(5)       - USER_FULL
+  //   POS_SPENDING(6)         - USER_FULL
 }
 
 Table transaction_types {
   id integer [primary key, increment]
-  type_name varchar(30) [unique, not null]           // DEPOSIT, WITHDRAWAL, TRANSFER, INITIAL_TRANSFER, INSTANT_TRANSFER
+  type_name varchar(30) [unique, not null]              // DEPOSIT, WITHDRAWAL, TRANSFER, INITIAL_TRANSFER, INSTANT_TRANSFER
+  // Seed: DEPOSIT(1), WITHDRAWAL(2), TRANSFER(3), INITIAL_TRANSFER(4), INSTANT_TRANSFER(5)
 }
 
 Table transaction_statuses {
   id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]         // PENDING, COMPLETED, FAILED, REJECTED, CANCELLED
+  status_name varchar(30) [unique, not null]            // PENDING, COMPLETED, FAILED, REJECTED, CANCELLED
+  // Seed: PENDING(1), COMPLETED(2), FAILED(3), REJECTED(4), CANCELLED(5)
 }
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN TABLES
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 
 Table users {
   id bigint [primary key, increment]
-  keycloak_id varchar(255) [unique]
-  username varchar(50) [unique, not null]
+  keycloak_id varchar(255) [unique, null]               // FK logica verso Keycloak
+  username varchar(50) [unique, not null]               // = email (lowercase)
   first_name varchar(100) [not null]
   last_name varchar(100) [not null]
-  birth_date date
-  email varchar(150) [unique, not null]
+  birth_date date [null]
+  email varchar(150) [unique, not null]                 // lowercase normalizzato
+  profession varchar(100) [not null]
+  gender varchar(1) [not null]                          // M / F
+  fiscal_code varchar(16) [unique, not null]            // 16 caratteri
+  phone varchar(20) [not null]
+  residence varchar(200) [not null]
+  birth_place varchar(100) [not null]
+  birth_province varchar(2) [not null]                  // 2 caratteri (es. RM)
   role_type_id integer [not null, ref: > role_types.id]
   status_id integer [not null, ref: > user_statuses.id]
-  branch_code varchar(20)
-  profile_picture_url varchar(500)
-  password_changed_at timestamp
-  gender varchar(1)
-  fiscal_code varchar(16) [unique]
-  phone varchar(20)
-  residence varchar(200)
-  birth_place varchar(100)
-  birth_province varchar(2)
-  profession varchar(100)
+  branch_code varchar(20) [null]
   limits_setup_complete boolean [not null, default: false]
-  created_at timestamp
+  profile_picture_url varchar(255) [null]
+  password_changed_at timestamptz [null]                // usato da JwtPasswordChangeFilter
+  created_at timestamptz                                // default: Europe/Rome now()
 }
 
 Table accounts {
   id bigint [primary key, increment]
-  account_number varchar(50) [unique, not null]
-  balance numeric(15,2) [not null, default: 0]
-  status_id integer [not null, ref: > account_statuses.id]
+  account_number varchar(50) [unique, not null]         // IT IBAN-like generato
+  balance numeric(15,2) [not null, default: 0.00]
+  status_id integer [not null]                          // ref logica a account_statuses.id
   user_id bigint [not null, ref: > users.id]
-  created_at timestamp
-  closed_at timestamp
-  closure_requested_at timestamp
-  closure_rejected_at timestamp
-  source_account_number varchar(50)
-  initial_amount numeric(15,2)
-  version bigint                                      // @Version optimistic lock
+  created_at timestamptz
+  closed_at timestamptz [null]
+  closure_requested_at timestamptz [null]               // data richiesta chiusura
+  closure_rejected_at timestamptz [null]                // data rifiuto chiusura
+  source_account_number varchar(50) [null]              // conto origine per apertura con fondi
+  initial_amount numeric(15,2) [null]                   // importo iniziale da conto origine
+  version bigint [default: 0]                           // @Version ottimistic locking
 }
 
 Table account_limits {
@@ -96,19 +111,19 @@ Table account_limits {
   account_id bigint [not null, ref: > accounts.id]
   limit_type_id integer [not null, ref: > limit_types.id]
   max_amount numeric(15,2) [not null]
-  updated_at timestamp
+  updated_at timestamptz
   indexes: unique (account_id, limit_type_id)
 }
 
 Table cards {
   id bigint [primary key, increment]
-  account_id bigint [not null]
-  card_number varchar(16) [unique, not null]
-  cvv varchar(3) [not null]
-  expiration_date date [not null]
+  card_number varchar(16) [unique, not null]            // 16 cifre
   holder_name varchar(150) [not null]
+  expiration_date date [not null]                       // now() + 5 anni
+  cvv varchar(3) [not null]                             // 3 cifre
   card_type_id integer [not null, ref: > card_types.id]
-  status_id integer [ref: > card_statuses.id]
+  status_id integer [null, ref: > card_statuses.id]
+  account_id bigint [not null]                          // FK logica (nessun constraint JPA)
 }
 
 Table transactions {
@@ -116,92 +131,130 @@ Table transactions {
   amount numeric(15,2) [not null]
   type_id integer [not null, ref: > transaction_types.id]
   status_id integer [not null, ref: > transaction_statuses.id]
-  description varchar(255)
-  source_balance_after numeric(15,2)
-  dest_balance_after numeric(15,2)
-  created_at timestamp
-  scheduled_date timestamp
-  source_account_id bigint [ref: > accounts.id]
-  destination_account_id bigint [ref: > accounts.id]
+  description varchar(255) [null]
+  source_balance_after numeric(15,2) [null]
+  dest_balance_after numeric(15,2) [null]
+  created_at timestamptz
+  scheduled_date timestamptz [null]                     // data programmata per bonifici non istantanei
+  source_account_id bigint [null, ref: > accounts.id]
+  destination_account_id bigint [null, ref: > accounts.id]
 }
 
 Table beneficiaries {
   id bigint [primary key, increment]
   user_id bigint [not null, ref: > users.id]
   nickname varchar(100) [not null]
-  beneficiary_name varchar(150)
+  beneficiary_name varchar(150) [null]
   destination_account_number varchar(50) [not null]
-  created_at timestamp
+  created_at timestamptz
   indexes: unique (user_id, destination_account_number)
 }
 
 Table notifications {
   id bigint [primary key, increment]
-  user_id bigint [not null]
-  type varchar(50) [not null]
+  user_id bigint [not null, ref: > users.id]            // FK logica (nessun constraint JPA)
+  type varchar(50) [not null]                           // ACCOUNT, TRANSFER, DEPOSIT, WITHDRAWAL, SCHEDULED_TRANSFER
   message varchar(500) [not null]
-  message_key varchar(100)
-  message_params varchar(500)
-  is_read boolean [not null, default: false]
-  created_at timestamp [not null]
+  message_key varchar(100) [null]                       // NOTIF_* per notifiche "importanti"
+  message_params varchar(500) [null]                    // JSON array di parametri
+  read boolean [not null, default: false]               // column: "read"
+  created_at timestamptz [not null]                     // default: Europe/Rome now()
 }
 
 Table audit_logs {
   id bigint [primary key, increment]
-  entity_type varchar(50) [not null]
-  entity_id bigint
-  action varchar(50) [not null]
-  performed_by varchar(100) [not null]
-  performed_by_user_id bigint
-  details varchar(500)
-  performed_at timestamp
+  entity_type varchar(50) [not null]                    // REGISTRATION, ACCOUNT, etc.
+  entity_id bigint [null]
+  action varchar(50) [not null]                         // VALIDATE, REJECT, REOPEN, DELETE, ACTIVATE, FREEZE, etc.
+  performed_by varchar(100) [not null]                  // "system" o nome admin/employee
+  performed_by_user_id bigint [null, ref: > users.id]  // FK logica
+  details varchar(500) [null]
+  performed_at timestamptz
 }
 
 Table user_pins {
   id bigint [primary key, increment]
-  user_id bigint [unique, not null, ref: > users.id]
-  pin_hash varchar(255) [not null]
-  created_at timestamp
+  user_id bigint [unique, not null, ref: > users.id]    // 1:1 con users
+  pin_hash varchar(255) [not null]                      // BCrypt hash
+  created_at timestamptz
 }
 
 Table password_change_requests {
   id bigint [primary key, increment]
-  user_id bigint [not null]
-  new_plain_password varchar(100) [not null]
-  status varchar(20) [not null]
-  created_at timestamp [not null]
-  processed_at timestamp
+  user_id bigint [not null, ref: > users.id]            // FK logica
+  status varchar(20) [not null]                         // PENDING, APPROVED, REJECTED
+  created_at timestamptz [not null]                     // default: Europe/Rome now()
+  processed_at timestamptz [null]
 }
 
-// ═══════════════════════════════════════════════
-// STATUS CONSTANTS
-// ═══════════════════════════════════════════════
+Table limit_change_requests {
+  id bigint [primary key, increment]
+  user_id bigint [not null]                             // FK logica a users.id
+  account_number varchar(30) [not null]
+  limit_type_name varchar(30) [not null]                // nome del LimitType
+  requested_amount numeric(15,2) [not null]
+  current_amount numeric(15,2) [not null]
+  status varchar(20) [not null]                         // PENDING, APPROVED, REJECTED
+  created_at timestamptz [not null]                     // default: Europe/Rome now()
+  processed_at timestamptz [null]
+}
 
-// AccountStatus:   INACTIVE=1, ACTIVE=2, FROZEN=3, CLOSED=4
-// UserStatus:      PENDING=1, ACTIVE=2, ANNULLED=3, SUSPENDED=4
-// RoleType:        CUSTOMER=1, EMPLOYEE=2, ADMIN=3
-// TransactionType: DEPOSIT=1, WITHDRAWAL=2, TRANSFER=3, INITIAL_TRANSFER=4, INSTANT_TRANSFER=5
+// ═══════════════════════════════════════════════════════════════════════════════
+// STATUS CONSTANTS (ID fissi)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// UserStatus:       PENDING=1, ACTIVE=2, ANNULLED=3, SUSPENDED=4
+// RoleType:         CUSTOMER(1)=C, EMPLOYEE(2)=D, ADMIN(3)=A
+// AccountStatus:    INACTIVE=1, ACTIVE=2, FROZEN=3, CLOSED=4
+// CardStatus:       INACTIVE=1, ACTIVE=2, BLOCKED=3, CLOSED=4
+// CardType:         DEBIT=1
+// TransactionType:  DEPOSIT=1, WITHDRAWAL=2, TRANSFER=3, INITIAL_TRANSFER=4, INSTANT_TRANSFER=5
 // TransactionStatus: PENDING=1, COMPLETED=2, FAILED=3, REJECTED=4, CANCELLED=5
 
-// ═══════════════════════════════════════════════
-// FOREIGN KEY RELATIONSHIPS
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// FOREIGN KEY RELATIONSHIPS (JPA esplicite e logiche)
+// ═══════════════════════════════════════════════════════════════════════════════
 
-// users.role_type_id          → role_types.id
-// users.status_id             → user_statuses.id
-// accounts.user_id            → users.id
-// accounts.status_id          → account_statuses.id
-// account_limits.account_id   → accounts.id
-// account_limits.limit_type_id → limit_types.id
-// cards.account_id            → accounts.id (no explicit JPA rel)
-// cards.card_type_id          → card_types.id
-// cards.status_id             → card_statuses.id
-// transactions.type_id        → transaction_types.id
-// transactions.status_id      → transaction_statuses.id
-// transactions.source_account_id → accounts.id
-// transactions.destination_account_id → accounts.id
-// beneficiaries.user_id       → users.id
-// notifications.user_id       → users.id (no explicit JPA rel)
-// audit_logs.performed_by_user_id → users.id (no explicit JPA rel)
-// user_pins.user_id           → users.id (unique → 1:1)
-// password_change_requests.user_id → users.id (no explicit JPA rel)
+// Con constraint FK JPA:
+//   users.role_type_id          → role_types.id
+//   users.status_id             → user_statuses.id
+//   accounts.user_id            → users.id
+//   account_limits.account_id   → accounts.id
+//   account_limits.limit_type_id → limit_types.id
+//   cards.card_type_id          → card_types.id
+//   cards.status_id             → card_statuses.id
+//   transactions.type_id        → transaction_types.id
+//   transactions.status_id      → transaction_statuses.id
+//   transactions.source_account_id → accounts.id
+//   transactions.destination_account_id → accounts.id
+//   beneficiaries.user_id       → users.id
+//   user_pins.user_id           → users.id (UNIQUE = 1:1)
+
+// Senza constraint FK (relazioni logiche):
+//   cards.account_id            → accounts.id
+//   notifications.user_id       → users.id
+//   audit_logs.performed_by_user_id → users.id
+//   password_change_requests.user_id → users.id
+//   limit_change_requests.user_id → users.id
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RELAZIONI PRINCIPALI (OneToMany / ManyToOne)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// users  *---1 user_statuses
+// users  *---1 role_types
+// users  1---* accounts
+// users  1---? user_pins (0..1)
+// users  1---* notifications
+// users  1---* password_change_requests
+// users  1---* beneficiaries
+// users  1---* limit_change_requests
+// accounts 1---* account_limits
+// accounts 1---* transactions (come source_account o destination_account)
+// accounts 1---* cards (senza constraint FK JPA)
+
+// NOTA: Le tabelle accounts, cards, beneficiaries, notifications NON hanno
+//       relazioni JPA bidirezionali esplicite su entrambi i lati; alcune FK
+//       sono gestite solo a livello logico senza constraint DB.
+// NOTA: accounts.version usa @Version (ottimistic locking) per evitare
+//       lost update in transazioni concorrenti.
