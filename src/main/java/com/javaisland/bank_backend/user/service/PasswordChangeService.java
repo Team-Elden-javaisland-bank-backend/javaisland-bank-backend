@@ -4,7 +4,6 @@ import com.javaisland.bank_backend.auth.service.KeycloakAdminService;
 import com.javaisland.bank_backend.auth.service.RegistrationService;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.notification.service.NotificationService;
-import com.javaisland.bank_backend.user.dto.PasswordChangeRequestCreateDto;
 import com.javaisland.bank_backend.user.dto.PasswordChangeRequestDto;
 import com.javaisland.bank_backend.user.model.PasswordChangeRequest;
 import com.javaisland.bank_backend.user.model.User;
@@ -15,7 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
@@ -29,29 +28,17 @@ public class PasswordChangeService {
     private final KeycloakAdminService keycloakAdminService;
     private final NotificationService notificationService;
 
-    public void requestPasswordChange(Long userId, PasswordChangeRequestCreateDto request) {
+    public void requestPasswordChange(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
 
-        String newPwd = request.getNewPassword();
-        if (newPwd.length() < 8
-                || !newPwd.matches(".*[A-Z].*")
-                || !newPwd.matches(".*[a-z].*")
-                || !newPwd.matches(".*\\d.*")
-                || !newPwd.matches(".*[^a-zA-Z0-9].*")) {
-            throw new ApiBankException(
-                    "La password deve contenere almeno 8 caratteri, 1 maiuscola, 1 minuscola, 1 numero e 1 carattere speciale.",
-                    "INVALID_PASSWORD_FORMAT");
-        }
-
-        passwordChangeRequestRepository.findFirstByUserIdAndStatusOrderByCreatedAtDesc(userId, "PENDING")
+        passwordChangeRequestRepository.findFirstByUser_IdAndStatusOrderByCreatedAtDesc(userId, "PENDING")
                 .ifPresent(existing -> {
                     throw new ApiBankException("Richiesta già in sospeso.", "PENDING_REQUEST_EXISTS");
                 });
 
         PasswordChangeRequest changeRequest = PasswordChangeRequest.builder()
-                .userId(userId)
-                .newPlainPassword(request.getNewPassword())
+                .user(user)
                 .status("PENDING")
                 .build();
 
@@ -65,23 +52,22 @@ public class PasswordChangeService {
 
         return pendingRequests.stream()
                 .map(req -> {
-                    User user = userRepository.findById(req.getUserId()).orElse(null);
-                    return PasswordChangeRequestDto.builder()
-                            .id(req.getId())
-                            .userId(req.getUserId())
-                            .userFirstName(user != null ? user.getFirstName() : null)
-                            .userLastName(user != null ? user.getLastName() : null)
-                            .userEmail(user != null ? user.getEmail() : null)
-                            .newPlainPassword(req.getNewPlainPassword())
-                            .status(req.getStatus())
-                            .createdAt(req.getCreatedAt())
-                            .build();
+                    User u = req.getUser();
+                return PasswordChangeRequestDto.builder()
+                        .id(req.getId())
+                        .userId(u.getId())
+                        .userFirstName(u.getFirstName())
+                        .userLastName(u.getLastName())
+                        .userEmail(u.getEmail())
+                        .status(req.getStatus())
+                        .createdAt(req.getCreatedAt())
+                        .build();
                 })
                 .toList();
     }
 
     @Transactional
-    public void approveRequest(Long requestId) {
+    public void approveRequest(Long requestId, String newPassword) {
         PasswordChangeRequest request = passwordChangeRequestRepository.findById(requestId)
                 .orElseThrow(() -> new ApiBankException("Richiesta non trovata.", "REQUEST_NOT_FOUND"));
 
@@ -89,17 +75,16 @@ public class PasswordChangeService {
             throw new ApiBankException("La richiesta non è in stato PENDING.", "INVALID_REQUEST_STATE");
         }
 
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+        User user = request.getUser();
 
-        user.setPasswordChangedAt(LocalDateTime.now(ZoneId.of("Europe/Rome")));
+        user.setPasswordChangedAt(OffsetDateTime.now(ZoneId.of("Europe/Rome")));
         userRepository.save(user);
 
-        keycloakAdminService.resetPassword(user.getKeycloakId(), request.getNewPlainPassword());
+        keycloakAdminService.resetPassword(user.getKeycloakId(), newPassword);
         keycloakAdminService.logoutUser(user.getKeycloakId());
 
         request.setStatus("APPROVED");
-        request.setProcessedAt(LocalDateTime.now(ZoneId.of("Europe/Rome")));
+        request.setProcessedAt(OffsetDateTime.now(ZoneId.of("Europe/Rome")));
         passwordChangeRequestRepository.save(request);
 
         notificationService.send(user.getId(), "PASSWORD_CHANGE", "La tua richiesta di cambio password è stata approvata.", "NOTIF_PWD_CHANGE_APPROVED", null);
@@ -117,23 +102,22 @@ public class PasswordChangeService {
         }
 
         request.setStatus("REJECTED");
-        request.setProcessedAt(LocalDateTime.now(ZoneId.of("Europe/Rome")));
+        request.setProcessedAt(OffsetDateTime.now(ZoneId.of("Europe/Rome")));
         passwordChangeRequestRepository.save(request);
 
-        notificationService.send(request.getUserId(), "PASSWORD_CHANGE", "La tua richiesta di cambio password è stata rifiutata.", "NOTIF_PWD_CHANGE_REJECTED", null);
+        notificationService.send(request.getUser().getId(), "PASSWORD_CHANGE", "La tua richiesta di cambio password è stata rifiutata.", "NOTIF_PWD_CHANGE_REJECTED", null);
 
-        log.info("Password change request id={} rejected for user id={}", requestId, request.getUserId());
+        log.info("Password change request id={} rejected for user id={}", requestId, request.getUser().getId());
     }
 
     public List<PasswordChangeRequestDto> getRequestsByUserId(Long userId) {
-        return passwordChangeRequestRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+        return passwordChangeRequestRepository.findByUser_IdOrderByCreatedAtDesc(userId).stream()
                 .map(req -> PasswordChangeRequestDto.builder()
                         .id(req.getId())
-                        .userId(req.getUserId())
+                        .userId(req.getUser().getId())
                         .userFirstName(null)
                         .userLastName(null)
                         .userEmail(null)
-                        .newPlainPassword(null)
                         .status(req.getStatus())
                         .createdAt(req.getCreatedAt())
                         .processedAt(req.getProcessedAt())

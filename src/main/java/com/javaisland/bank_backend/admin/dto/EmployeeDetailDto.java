@@ -3,7 +3,7 @@ package com.javaisland.bank_backend.admin.dto;
 import lombok.Builder;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Builder
 public record EmployeeDetailDto(
@@ -14,5 +14,5 @@ public record EmployeeDetailDto(
     LocalDate birthDate,
     String status,
     String profilePictureUrl,
-    LocalDateTime createdAt
+    OffsetDateTime createdAt
 ) {}

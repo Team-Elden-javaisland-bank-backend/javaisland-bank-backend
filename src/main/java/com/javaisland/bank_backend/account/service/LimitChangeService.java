@@ -19,6 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -128,7 +130,7 @@ public class LimitChangeService {
         }
 
         request.setStatus("APPROVED");
-        request.setProcessedAt(java.time.LocalDateTime.now(java.time.ZoneId.of("Europe/Rome")));
+        request.setProcessedAt(OffsetDateTime.now(ZoneId.of("Europe/Rome")));
         limitChangeRequestRepository.save(request);
 
         notificationService.send(request.getUserId(), "LIMIT_CHANGE",
@@ -147,7 +149,7 @@ public class LimitChangeService {
         }
 
         request.setStatus("REJECTED");
-        request.setProcessedAt(java.time.LocalDateTime.now(java.time.ZoneId.of("Europe/Rome")));
+        request.setProcessedAt(OffsetDateTime.now(ZoneId.of("Europe/Rome")));
         limitChangeRequestRepository.save(request);
 
         notificationService.send(request.getUserId(), "LIMIT_CHANGE",

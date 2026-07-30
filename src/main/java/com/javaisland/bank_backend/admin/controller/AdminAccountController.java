@@ -12,7 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @RestController
@@ -33,8 +33,8 @@ public class AdminAccountController {
         private String userFullName;
         private String userEmail;
         private String profilePictureUrl;
-        private LocalDateTime createdAt;
-        private LocalDateTime closedAt;
+        private OffsetDateTime createdAt;
+        private OffsetDateTime closedAt;
     }
 
     @GetMapping

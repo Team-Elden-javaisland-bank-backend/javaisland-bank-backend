@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -48,7 +48,7 @@ public class AdminCustomerController {
         private String profilePictureUrl;
         private int accountCount;
         private BigDecimal totalBalance;
-        private LocalDateTime createdAt;
+        private OffsetDateTime createdAt;
     }
 
     @Data
@@ -68,7 +68,7 @@ public class AdminCustomerController {
         private String profession;
         private String status;
         private String profilePictureUrl;
-        private LocalDateTime createdAt;
+        private OffsetDateTime createdAt;
         private List<AccountResponseDto> accounts;
     }
 

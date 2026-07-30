@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @Builder
@@ -17,8 +17,7 @@ public class PasswordChangeRequestDto {
     private String userFirstName;
     private String userLastName;
     private String userEmail;
-    private String newPlainPassword;
     private String status;
-    private LocalDateTime createdAt;
-    private LocalDateTime processedAt;
+    private OffsetDateTime createdAt;
+    private OffsetDateTime processedAt;
 }

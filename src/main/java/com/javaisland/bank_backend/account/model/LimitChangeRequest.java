@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
 @Entity
@@ -39,15 +39,15 @@ public class LimitChangeRequest {
     private String status;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     @Column(name = "processed_at")
-    private LocalDateTime processedAt;
+    private OffsetDateTime processedAt;
 
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
-            createdAt = LocalDateTime.now(ZoneId.of("Europe/Rome"));
+            createdAt = OffsetDateTime.now(ZoneId.of("Europe/Rome"));
         }
     }
 }

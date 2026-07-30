@@ -4,7 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.javaisland.bank_backend.notification.dto.NotificationDto;
 import com.javaisland.bank_backend.notification.model.Notification;
+import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.notification.repository.NotificationRepository;
+import com.javaisland.bank_backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
@@ -22,10 +24,12 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final MessageSource messageSource;
     private final ObjectMapper objectMapper;
+    private final UserRepository userRepository;
 
     public void send(Long userId, String type, String message, String messageKey, String messageParams) {
+        User user = userRepository.findById(userId).orElse(null);
         Notification n = Notification.builder()
-                .userId(userId)
+                .user(user)
                 .type(type)
                 .message(message)
                 .messageKey(messageKey)
@@ -36,7 +40,7 @@ public class NotificationService {
     }
 
     public List<NotificationDto> getNotifications(Long userId, Locale locale) {
-        return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+        return notificationRepository.findByUser_IdOrderByCreatedAtDesc(userId).stream()
                 .map(n -> {
                     String translatedMessage = n.getMessage();
                     if (n.getMessageKey() != null && !n.getMessageKey().isBlank()) {
@@ -56,13 +60,13 @@ public class NotificationService {
     }
 
     public long getUnreadCount(Long userId) {
-        return notificationRepository.countByUserIdAndReadFalse(userId);
+        return notificationRepository.countByUser_IdAndReadFalse(userId);
     }
 
     @Transactional
     public void markAsRead(Long notificationId, Long userId) {
         notificationRepository.findById(notificationId).ifPresent(n -> {
-            if (n.getUserId().equals(userId)) {
+            if (n.getUser().getId().equals(userId)) {
                 n.setRead(true);
                 notificationRepository.save(n);
             }
@@ -71,7 +75,7 @@ public class NotificationService {
 
     @Transactional
     public void markAllAsRead(Long userId) {
-        notificationRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+        notificationRepository.findByUser_IdOrderByCreatedAtDesc(userId).stream()
                 .filter(n -> !n.isRead())
                 .forEach(n -> {
                     n.setRead(true);

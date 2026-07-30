@@ -40,11 +40,25 @@ public class AuthController {
 
     @PostMapping("/keycloak-login")
     public ResponseEntity<?> keycloakLogin(@Valid @RequestBody LoginRequestDto request) {
-        User user = userRepository.findByUsername(request.getUsername()).orElse(null);
+        String username = request.getUsername().toLowerCase();
+        User user = userRepository.findByUsername(username).orElse(null);
+
+        if (user != null) {
+            String userStatus = user.getStatus().getUserStatus();
+            if (!"ACTIVE".equals(userStatus)) {
+                String errorCode = switch (userStatus) {
+                    case "PENDING" -> "ACCOUNT_PENDING";
+                    case "ANNULLED" -> "ACCOUNT_ANNULLED";
+                    case "SUSPENDED" -> "ACCOUNT_SUSPENDED";
+                    default -> "ACCOUNT_UNAVAILABLE";
+                };
+                throw new com.javaisland.bank_backend.exception.ApiBankException(errorCode, errorCode);
+            }
+        }
 
         try {
             Map<String, Object> tokenResponse = keycloakAdminService.tokenLogin(
-                    request.getUsername(), request.getPassword());
+                    username, request.getPassword());
 
             String keycloakToken = (String) tokenResponse.get("access_token");
 
@@ -53,22 +67,11 @@ public class AuthController {
                 keycloakId = SignedJWT.parse(keycloakToken).getJWTClaimsSet().getSubject();
             } catch (Exception e) {
                 throw new com.javaisland.bank_backend.exception.ApiBankException(
-                        "Token Keycloak non valido.", "INVALID_TOKEN");
+                        "INVALID_TOKEN", "INVALID_TOKEN");
             }
 
             if (user == null) {
-                user = syncKeycloakUserToDb(keycloakId, request.getUsername());
-            }
-
-            String userStatus = user.getStatus().getUserStatus();
-            if (!"ACTIVE".equals(userStatus)) {
-                String message = switch (userStatus) {
-                    case "PENDING" -> "Account in attesa di validazione da parte di un impiegato.";
-                    case "ANNULLED" -> "Registrazione annullata. Contatta il supporto.";
-                    case "SUSPENDED" -> "Account sospeso. Contatta il supporto.";
-                    default -> "Account non disponibile.";
-                };
-                throw new com.javaisland.bank_backend.exception.ApiBankException(message, "ACCOUNT_" + userStatus);
+                user = syncKeycloakUserToDb(keycloakId, username);
             }
 
             if (user.getKeycloakId() == null || !user.getKeycloakId().equals(keycloakId)) {
@@ -93,7 +96,7 @@ public class AuthController {
         } catch (Exception e) {
             log.error("Keycloak login error: {}", e.getMessage());
             throw new com.javaisland.bank_backend.exception.ApiBankException(
-                    "Keycloak non raggiungibile.", "KEYCLOAK_ERROR");
+                    "KEYCLOAK_ERROR", "KEYCLOAK_ERROR");
         }
     }
 
@@ -103,16 +106,16 @@ public class AuthController {
                 .filter(u -> keycloakId.equals(u.get("id")))
                 .findFirst()
                 .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException(
-                        "Utente non trovato su Keycloak.", "USER_NOT_FOUND_KEYCLOAK"));
+                        "USER_NOT_FOUND_KEYCLOAK", "USER_NOT_FOUND_KEYCLOAK"));
 
         String firstName = (String) kcUser.getOrDefault("firstName", "");
         String lastName = (String) kcUser.getOrDefault("lastName", "");
         String email = (String) kcUser.getOrDefault("email", username);
 
         var customerRole = roleTypeRepository.findByRoleName("C")
-                .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException("Ruolo C non configurato."));
+                .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND"));
         var activeStatus = userStatusRepository.findByUserStatus("ACTIVE")
-                .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException("Stato ACTIVE non configurato."));
+                .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException("STATUS_NOT_CONFIGURED", "STATUS_NOT_CONFIGURED"));
 
         User user = new User();
         user.setKeycloakId(keycloakId);

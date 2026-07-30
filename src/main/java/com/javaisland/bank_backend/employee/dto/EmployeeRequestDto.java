@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @Builder
@@ -24,6 +24,6 @@ public class EmployeeRequestDto {
     private String accountNumber;
     private String limitTypeName;
     private BigDecimal requestedAmount;
-    private LocalDateTime createdAt;
-    private LocalDateTime processedAt;
+    private OffsetDateTime createdAt;
+    private OffsetDateTime processedAt;
 }

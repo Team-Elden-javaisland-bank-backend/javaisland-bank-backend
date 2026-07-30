@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class NotificationDto {
@@ -14,5 +14,5 @@ public class NotificationDto {
     private String messageKey;
     private String messageParams;
     private boolean read;
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 }

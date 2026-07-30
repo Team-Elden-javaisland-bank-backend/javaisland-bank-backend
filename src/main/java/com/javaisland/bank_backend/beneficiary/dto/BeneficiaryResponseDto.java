@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @Builder
@@ -13,9 +13,10 @@ import java.time.LocalDateTime;
 public class BeneficiaryResponseDto {
     private Long id;
     private String nickname;
+    private String beneficiaryName;
     private String destinationAccountNumber;
     private String holderFirstName;
     private String holderLastName;
     private String profilePictureUrl;
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 }

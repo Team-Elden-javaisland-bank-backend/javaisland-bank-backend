@@ -10,6 +10,7 @@ import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BeneficiaryService {
 
     private final BeneficiaryRepository beneficiaryRepository;
@@ -25,17 +27,6 @@ public class BeneficiaryService {
 
     @Transactional
     public BeneficiaryResponseDto save(Long userId, BeneficiaryRequestDto request) {
-        var account = accountRepository.findByAccountNumber(request.getDestinationAccountNumber())
-                .orElseThrow(() -> new ApiBankException("Conto " + request.getDestinationAccountNumber() + " non trovato.", "ACCOUNT_NOT_FOUND"));
-
-        if (account.getUser().getId().equals(userId)) {
-            throw new ApiBankException("Non puoi aggiungere uno dei tuoi conti come beneficiario.", "SELF_BENEFICIARY_FORBIDDEN");
-        }
-
-        if (account.getStatusId() != AccountStatus.ACTIVE) {
-            throw new ApiBankException("Il conto di destinazione non è attivo.", "INVALID_ACCOUNT_STATE");
-        }
-
         if (beneficiaryRepository.existsByUserIdAndDestinationAccountNumber(userId, request.getDestinationAccountNumber())) {
             throw new ApiBankException("Il beneficiario esiste già.", "DUPLICATE_BENEFICIARY");
         }
@@ -47,8 +38,26 @@ public class BeneficiaryService {
         beneficiary.setUser(user);
         beneficiary.setNickname(request.getNickname());
         beneficiary.setDestinationAccountNumber(request.getDestinationAccountNumber());
+        beneficiary.setBeneficiaryName(request.getBeneficiaryName());
 
-        return mapToDto(beneficiaryRepository.save(beneficiary));
+        boolean isExternal = request.getBeneficiaryName() != null && !request.getBeneficiaryName().isBlank();
+
+        if (!isExternal) {
+            var account = accountRepository.findByAccountNumber(request.getDestinationAccountNumber())
+                    .orElseThrow(() -> new ApiBankException("Conto " + request.getDestinationAccountNumber() + " non trovato.", "ACCOUNT_NOT_FOUND"));
+
+            if (account.getUser().getId().equals(userId)) {
+                throw new ApiBankException("Non puoi aggiungere uno dei tuoi conti come beneficiario.", "SELF_BENEFICIARY_FORBIDDEN");
+            }
+
+            if (account.getStatusId() != AccountStatus.ACTIVE) {
+                throw new ApiBankException("Il conto di destinazione non è attivo.", "INVALID_ACCOUNT_STATE");
+            }
+        }
+
+        Beneficiary saved = beneficiaryRepository.save(beneficiary);
+        log.info("Beneficiary '{}' saved for user id={}", saved.getNickname(), userId);
+        return mapToDto(saved);
     }
 
     @Transactional(readOnly = true)
@@ -64,6 +73,7 @@ public class BeneficiaryService {
         Beneficiary beneficiary = beneficiaryRepository.findByIdAndUserId(beneficiaryId, userId)
                 .orElseThrow(() -> new ApiBankException("Beneficiario non trovato.", "BENEFICIARY_NOT_FOUND"));
         beneficiaryRepository.delete(beneficiary);
+        log.info("Deleted beneficiary id={} for user id={}", beneficiaryId, userId);
     }
 
     public String resolveAccountNumber(Long userId, Long beneficiaryId) {
@@ -91,6 +101,7 @@ public class BeneficiaryService {
         var builder = BeneficiaryResponseDto.builder()
                 .id(b.getId())
                 .nickname(b.getNickname())
+                .beneficiaryName(b.getBeneficiaryName())
                 .destinationAccountNumber(b.getDestinationAccountNumber())
                 .createdAt(b.getCreatedAt());
 

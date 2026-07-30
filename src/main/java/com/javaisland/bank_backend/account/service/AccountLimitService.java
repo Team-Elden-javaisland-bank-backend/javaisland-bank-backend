@@ -18,8 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -153,8 +154,8 @@ public class AccountLimitService {
                     }
                 }
                 case TYPE_DAILY -> {
-                    LocalDateTime dayStart = LocalDate.now().atStartOfDay();
-                    LocalDateTime dayEnd = LocalDate.now().atTime(LocalTime.MAX);
+                    OffsetDateTime dayStart = LocalDate.now().atStartOfDay(ZoneId.of("Europe/Rome")).toOffsetDateTime();
+                    OffsetDateTime dayEnd = LocalDate.now().atTime(LocalTime.MAX).atZone(ZoneId.of("Europe/Rome")).toOffsetDateTime();
                     BigDecimal sumToday = transactionRepository.sumAmountBySourceAccountAndTypeAndStatusBetween(
                             sourceAccount.getId(), TransactionType.TRANSFER, TransactionStatus.COMPLETED,
                             dayStart, dayEnd);
@@ -165,8 +166,8 @@ public class AccountLimitService {
                     }
                 }
                 case TYPE_MONTHLY -> {
-                    LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-                    LocalDateTime monthEnd = LocalDate.now().atTime(LocalTime.MAX);
+                    OffsetDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay(ZoneId.of("Europe/Rome")).toOffsetDateTime();
+                    OffsetDateTime monthEnd = LocalDate.now().atTime(LocalTime.MAX).atZone(ZoneId.of("Europe/Rome")).toOffsetDateTime();
                     BigDecimal sumMonth = transactionRepository.sumAmountBySourceAccountAndTypeAndStatusBetween(
                             sourceAccount.getId(), TransactionType.TRANSFER, TransactionStatus.COMPLETED,
                             monthStart, monthEnd);

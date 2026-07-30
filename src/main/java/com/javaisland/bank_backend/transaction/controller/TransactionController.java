@@ -16,6 +16,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -67,7 +68,7 @@ public class TransactionController {
             @RequestParam(defaultValue = "20") int size) {
         Long userId = getUserId(jwt);
         return ResponseEntity.ok(transactionService.getAllAccountsTransactions(
-                userId, start.atStartOfDay(), end.atTime(23, 59, 59), page, size));
+                userId, start.atStartOfDay(ZoneId.of("Europe/Rome")).toOffsetDateTime(), end.atTime(23, 59, 59).atZone(ZoneId.of("Europe/Rome")).toOffsetDateTime(), page, size));
     }
 
     @DeleteMapping("/{transactionId}/cancel")

@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @Builder
@@ -21,6 +21,6 @@ public class AccountResponseDto {
     private String profilePictureUrl;
     private Integer userStatusId;
     private BigDecimal initialAmount;
-    private LocalDateTime createdAt;
-    private LocalDateTime closedAt;
+    private OffsetDateTime createdAt;
+    private OffsetDateTime closedAt;
 }

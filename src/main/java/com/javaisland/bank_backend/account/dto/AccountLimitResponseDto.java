@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @Builder
@@ -15,6 +15,6 @@ public class AccountLimitResponseDto {
     private Long id;
     private String limitType;
     private BigDecimal maxAmount;
-    private LocalDateTime updatedAt;
+    private OffsetDateTime updatedAt;
     private String changePolicy;
 }

@@ -14,7 +14,6 @@ import com.javaisland.bank_backend.card.service.CardService;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.notification.repository.NotificationRepository;
 import com.javaisland.bank_backend.notification.service.NotificationService;
-import com.javaisland.bank_backend.savedbeneficiary.repository.SavedBeneficiaryRepository;
 import com.javaisland.bank_backend.transaction.repository.TransactionRepository;
 import com.javaisland.bank_backend.user.dto.CustomerListItemDto;
 import com.javaisland.bank_backend.user.dto.PendingRegistrationDto;
@@ -53,7 +52,6 @@ public class UserService {
     private final AccountLimitRepository accountLimitRepository;
     private final LimitChangeRequestRepository limitChangeRequestRepository;
     private final BeneficiaryRepository beneficiaryRepository;
-    private final SavedBeneficiaryRepository savedBeneficiaryRepository;
     private final NotificationRepository notificationRepository;
     private final PasswordChangeRequestRepository passwordChangeRequestRepository;
     private final UserPinRepository userPinRepository;
@@ -61,7 +59,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<PendingRegistrationDto> getPendingRegistrations() {
         var pendingStatus = userStatusRepository.findByUserStatus("PENDING")
-                .orElseThrow(() -> new ApiBankException("Stato PENDING non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         List<User> pendingUsers = userRepository.findByStatus(pendingStatus);
 
         return pendingUsers.stream().map(u ->
@@ -80,7 +78,7 @@ public class UserService {
     @Transactional
     public void validateRegistration(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato con id: " + userId));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         if (user.getStatus() != null && "ACTIVE".equals(user.getStatus().getUserStatus())) {
             throw new ApiBankException("Utente già attivato. Usa l'endpoint di attivazione conti per i conti secondari.", "USER_ALREADY_ACTIVE");
@@ -96,7 +94,7 @@ public class UserService {
         }
 
         var activeStatus = userStatusRepository.findByUserStatus("ACTIVE")
-                .orElseThrow(() -> new ApiBankException("Stato ACTIVE non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         user.setStatus(activeStatus);
         userRepository.save(user);
 
@@ -121,21 +119,20 @@ public class UserService {
     @Transactional
     public void rejectRegistration(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato con id: " + userId));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         var pendingStatus = userStatusRepository.findByUserStatus("PENDING")
-                .orElseThrow(() -> new ApiBankException("Stato PENDING non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         if (!user.getStatus().getId().equals(pendingStatus.getId())) {
             throw new ApiBankException("La registrazione non è in stato PENDING.", "INVALID_STATE");
         }
 
         if (user.getKeycloakId() != null) {
-            keycloakAdminService.deleteUser(user.getKeycloakId());
-            user.setKeycloakId(null);
+            keycloakAdminService.setUserEnabled(user.getKeycloakId(), false);
         }
 
         var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
-                .orElseThrow(() -> new ApiBankException("Stato ANNULLED non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         user.setStatus(annulledStatus);
         userRepository.save(user);
         auditLogService.log("REGISTRATION", userId, "REJECT", "system",
@@ -147,7 +144,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<PendingRegistrationDto> getAnnulledRegistrations() {
         var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
-                .orElseThrow(() -> new ApiBankException("Stato ANNULLED non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         List<User> annulledUsers = userRepository.findByStatus(annulledStatus);
 
         return annulledUsers.stream().map(u ->
@@ -166,16 +163,16 @@ public class UserService {
     @Transactional
     public void reopenRegistration(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato con id: " + userId));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
-                .orElseThrow(() -> new ApiBankException("Stato ANNULLED non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         if (!user.getStatus().getId().equals(annulledStatus.getId())) {
             throw new ApiBankException("La registrazione non è in stato ANNULLED.", "INVALID_STATE");
         }
 
         var pendingStatus = userStatusRepository.findByUserStatus("PENDING")
-                .orElseThrow(() -> new ApiBankException("Stato PENDING non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         user.setStatus(pendingStatus);
         userRepository.save(user);
         auditLogService.log("REGISTRATION", userId, "REOPEN", "system",
@@ -186,10 +183,10 @@ public class UserService {
     @Transactional
     public void deleteUserAndAccount(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato con id: " + userId));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
-                .orElseThrow(() -> new ApiBankException("Stato ANNULLED non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         if (!user.getStatus().getId().equals(annulledStatus.getId())) {
             throw new ApiBankException("Solo utenti con registrazione rifiutata possono essere eliminati.", "INVALID_STATE");
         }
@@ -204,10 +201,9 @@ public class UserService {
         limitChangeRequestRepository.findByUserIdOrderByCreatedAtDesc(userId)
                 .forEach(limitChangeRequestRepository::delete);
         beneficiaryRepository.findByUserId(userId).forEach(beneficiaryRepository::delete);
-        savedBeneficiaryRepository.findByUserId(userId).forEach(savedBeneficiaryRepository::delete);
-        notificationRepository.findByUserIdOrderByCreatedAtDesc(userId)
+        notificationRepository.findByUser_IdOrderByCreatedAtDesc(userId)
                 .forEach(notificationRepository::delete);
-        passwordChangeRequestRepository.findByUserIdOrderByCreatedAtDesc(userId)
+        passwordChangeRequestRepository.findByUser_IdOrderByCreatedAtDesc(userId)
                 .forEach(passwordChangeRequestRepository::delete);
         userPinRepository.findByUserId(userId).ifPresent(userPinRepository::delete);
 
@@ -224,7 +220,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<CustomerListItemDto> getAllCustomersSortedByName() {
         var customerRole = roleTypeRepository.findByRoleName("C")
-                .orElseThrow(() -> new ApiBankException("Ruolo C non configurato."));
+                .orElseThrow(() -> new ApiBankException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND"));
         return userRepository.findByRoleTypeOrderByFirstNameAscLastNameAsc(customerRole)
                 .stream().map(u -> CustomerListItemDto.builder()
                         .userId(u.getId())
@@ -241,7 +237,7 @@ public class UserService {
         List<User> users = userRepository.findAll();
 
         var customerRole = roleTypeRepository.findByRoleName("C")
-                .orElseThrow(() -> new ApiBankException("Ruolo C non configurato."));
+                .orElseThrow(() -> new ApiBankException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND"));
 
         List<User> sortedCustomers = users.stream()
                 .filter(u -> u.getRoleType().getId().equals(customerRole.getId()))
@@ -261,7 +257,7 @@ public class UserService {
             }
 
         } catch (IOException e) {
-            throw new ApiBankException("Errore durante la scrittura del file dei correntisti.");
+            throw new ApiBankException("FILE_WRITE_ERROR", "FILE_WRITE_ERROR");
         }
     }
 }

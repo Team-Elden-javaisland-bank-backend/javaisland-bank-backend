@@ -3,7 +3,7 @@ package com.javaisland.bank_backend.transaction.repository;
 import com.javaisland.bank_backend.transaction.model.Transaction;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.Collection;
 
 public final class TransactionSpecifications {
@@ -18,7 +18,7 @@ public final class TransactionSpecifications {
         );
     }
 
-    public static Specification<Transaction> createdBetween(LocalDateTime start, LocalDateTime end) {
+    public static Specification<Transaction> createdBetween(OffsetDateTime start, OffsetDateTime end) {
         return (root, query, cb) -> cb.between(root.get("createdAt"), start, end);
     }
 

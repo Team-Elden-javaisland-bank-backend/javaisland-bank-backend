@@ -33,7 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
@@ -203,7 +204,7 @@ public class TransactionService {
         tx.setDescription(description);
         tx.setSourceAccount(source);
         tx.setDestinationAccount(destination);
-        tx.setScheduledDate(scheduledDate.atStartOfDay());
+        tx.setScheduledDate(scheduledDate.atStartOfDay(ZoneId.of("Europe/Rome")).toOffsetDateTime());
         Transaction saved = transactionRepository.save(tx);
 
         notificationService.send(userId, "SCHEDULED_TRANSFER", "Bonifico programmato di €" + request.getAmount() + " a " + destination.getAccountNumber() + " per il " + scheduledDate + ".", "NOTIF_SCHEDULED_TRANSFER_CREATED", "[\"" + request.getAmount() + "\", \"" + destination.getAccountNumber() + "\", \"" + scheduledDate + "\"]");
@@ -230,7 +231,7 @@ public class TransactionService {
 
     @Transactional(readOnly = true)
     public PageResponseDto<TransactionResponseDto> getAllAccountsTransactions(
-            Long userId, LocalDateTime start, LocalDateTime end, int page, int size) {
+            Long userId, OffsetDateTime start, OffsetDateTime end, int page, int size) {
 
         if (end.isBefore(start)) {
             throw new ApiBankException("La data di fine non può essere precedente alla data di inizio.", "INVALID_DATE_RANGE");
@@ -261,7 +262,7 @@ public class TransactionService {
     public void executePendingTransfers() {
         int pendingStatusId = getStatusIdOrThrow("PENDING");
         List<Transaction> pendingTransactions = transactionRepository
-                .findByStatusIdAndScheduledDateLessThanEqual(pendingStatusId, LocalDateTime.now());
+                .findByStatusIdAndScheduledDateLessThanEqual(pendingStatusId, OffsetDateTime.now());
 
         for (Transaction tx : pendingTransactions) {
             try {

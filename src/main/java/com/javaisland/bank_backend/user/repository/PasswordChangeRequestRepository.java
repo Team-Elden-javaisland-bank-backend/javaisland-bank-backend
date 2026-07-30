@@ -12,7 +12,7 @@ public interface PasswordChangeRequestRepository extends JpaRepository<PasswordC
 
     List<PasswordChangeRequest> findByStatusOrderByCreatedAtDesc(String status);
 
-    Optional<PasswordChangeRequest> findFirstByUserIdAndStatusOrderByCreatedAtDesc(Long userId, String status);
+    Optional<PasswordChangeRequest> findFirstByUser_IdAndStatusOrderByCreatedAtDesc(Long userId, String status);
 
-    List<PasswordChangeRequest> findByUserIdOrderByCreatedAtDesc(Long userId);
+    List<PasswordChangeRequest> findByUser_IdOrderByCreatedAtDesc(Long userId);
 }

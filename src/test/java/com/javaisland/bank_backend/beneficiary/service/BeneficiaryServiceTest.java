@@ -66,8 +66,14 @@ class BeneficiaryServiceTest {
     @Test
     void save_accountNotFound() {
         var dto = new BeneficiaryRequestDto();
+        dto.setNickname("Test");
         dto.setDestinationAccountNumber("IT999");
 
+        var user = new User();
+        user.setId(1L);
+
+        when(beneficiaryRepository.existsByUserIdAndDestinationAccountNumber(1L, "IT999")).thenReturn(false);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(accountRepository.findByAccountNumber("IT999")).thenReturn(Optional.empty());
 
         assertThrows(ApiBankException.class, () -> beneficiaryService.save(1L, dto));
@@ -76,15 +82,21 @@ class BeneficiaryServiceTest {
     @Test
     void save_accountNotActive() {
         var dto = new BeneficiaryRequestDto();
+        dto.setNickname("Test");
         dto.setDestinationAccountNumber("IT999");
 
-        var user = new User();
-        user.setId(2L);
+        var owner = new User();
+        owner.setId(2L);
 
         var account = new Account();
         account.setStatusId(AccountStatus.INACTIVE);
-        account.setUser(user);
+        account.setUser(owner);
 
+        var user = new User();
+        user.setId(1L);
+
+        when(beneficiaryRepository.existsByUserIdAndDestinationAccountNumber(1L, "IT999")).thenReturn(false);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(accountRepository.findByAccountNumber("IT999")).thenReturn(Optional.of(account));
 
         assertThrows(ApiBankException.class, () -> beneficiaryService.save(1L, dto));
@@ -95,14 +107,6 @@ class BeneficiaryServiceTest {
         var dto = new BeneficiaryRequestDto();
         dto.setDestinationAccountNumber("IT999");
 
-        var user = new User();
-        user.setId(2L);
-
-        var account = new Account();
-        account.setStatusId(AccountStatus.ACTIVE);
-        account.setUser(user);
-
-        when(accountRepository.findByAccountNumber("IT999")).thenReturn(Optional.of(account));
         when(beneficiaryRepository.existsByUserIdAndDestinationAccountNumber(1L, "IT999")).thenReturn(true);
 
         assertThrows(ApiBankException.class, () -> beneficiaryService.save(1L, dto));

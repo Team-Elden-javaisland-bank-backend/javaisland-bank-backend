@@ -5,7 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "beneficiaries", uniqueConstraints = {
@@ -26,10 +26,13 @@ public class Beneficiary {
     @Column(nullable = false, length = 100)
     private String nickname;
 
+    @Column(name = "beneficiary_name", length = 150)
+    private String beneficiaryName;
+
     @Column(name = "destination_account_number", nullable = false, length = 50)
     private String destinationAccountNumber;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 }

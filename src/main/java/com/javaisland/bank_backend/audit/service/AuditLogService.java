@@ -13,7 +13,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @Service
@@ -26,13 +26,13 @@ public class AuditLogService {
 
     public void log(String entityType, Long entityId, String action, String performedBy, String details) {
         String resolvedPerformer = resolvePerformer(performedBy);
-        Long resolvedUserId = resolvePerformerUserId();
+        User resolvedUser = resolvePerformerUser();
         AuditLog entry = AuditLog.builder()
                 .entityType(entityType)
                 .entityId(entityId)
                 .action(action)
                 .performedBy(resolvedPerformer)
-                .performedByUserId(resolvedUserId)
+                .performedByUser(resolvedUser)
                 .details(details)
                 .build();
         auditLogRepository.save(entry);
@@ -54,17 +54,15 @@ public class AuditLogService {
         return fallback;
     }
 
-    private Long resolvePerformerUserId() {
+    private User resolvePerformerUser() {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
                 String keycloakId = jwt.getSubject();
-                return userRepository.findByKeycloakId(keycloakId)
-                        .map(User::getId)
-                        .orElse(null);
+                return userRepository.findByKeycloakId(keycloakId).orElse(null);
             }
         } catch (Exception e) {
-            log.debug("Cannot resolve performer userId from SecurityContext: {}", e.getMessage());
+            log.debug("Cannot resolve performer user from SecurityContext: {}", e.getMessage());
         }
         return null;
     }
@@ -84,14 +82,14 @@ public class AuditLogService {
     }
 
     @Transactional(readOnly = true)
-    public List<AuditLogDto> getByDateRange(LocalDateTime from, LocalDateTime to) {
+    public List<AuditLogDto> getByDateRange(OffsetDateTime from, OffsetDateTime to) {
         return auditLogRepository.findByPerformedAtBetweenOrderByPerformedAtDesc(from, to).stream()
                 .map(this::toDto)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<AuditLogDto> getByActionAndDateRange(String action, LocalDateTime from, LocalDateTime to) {
+    public List<AuditLogDto> getByActionAndDateRange(String action, OffsetDateTime from, OffsetDateTime to) {
         return auditLogRepository.findByActionAndPerformedAtBetweenOrderByPerformedAtDesc(action, from, to).stream()
                 .map(this::toDto)
                 .toList();
@@ -99,19 +97,21 @@ public class AuditLogService {
 
     @Transactional(readOnly = true)
     public List<AuditLogDto> getRecent(int days) {
-        return auditLogRepository.findRecentLogs(LocalDateTime.now().minusDays(days)).stream()
+        return auditLogRepository.findRecentLogs(OffsetDateTime.now().minusDays(days)).stream()
                 .map(this::toDto)
                 .toList();
     }
 
     private AuditLogDto toDto(AuditLog entry) {
+        User pu = entry.getPerformedByUser();
         return AuditLogDto.builder()
                 .id(entry.getId())
                 .entityType(entry.getEntityType())
                 .entityId(entry.getEntityId())
                 .action(entry.getAction())
                 .performedBy(entry.getPerformedBy())
-                .performedByUserId(entry.getPerformedByUserId())
+                .performedByUserId(pu != null ? pu.getId() : null)
+                .performedByUserEmail(pu != null ? pu.getEmail() : null)
                 .details(entry.getDetails())
                 .performedAt(entry.getPerformedAt())
                 .build();

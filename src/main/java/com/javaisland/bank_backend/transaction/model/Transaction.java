@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "transactions")
@@ -37,10 +37,10 @@ public class Transaction {
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     @Column(name = "scheduled_date")
-    private LocalDateTime scheduledDate;
+    private OffsetDateTime scheduledDate;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "source_account_id")

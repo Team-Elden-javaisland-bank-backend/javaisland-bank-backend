@@ -1,16 +1,56 @@
-// JAVAISLAND BANK - Database Schema
-// Visualizable on dbdiagram.io
-// Source: actual PostgreSQL database (real_bank_postgres)
+// ELDENBANK - Database Schema
+// Source: JPA entity annotations + DataInitializer seed values
+// Schema managed via Hibernate ddl-auto:update (no Flyway)
+
+// ═══════════════════════════════════════════════
+// LOOKUP TABLES (auto-seeded by DataInitializer)
+// ═══════════════════════════════════════════════
 
 Table role_types {
   id integer [primary key, increment]
-  role_name varchar(30) [unique, not null]
+  role_name varchar(30) [unique, not null]          // C, D, A
 }
 
 Table user_statuses {
   id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]
+  user_status varchar(30) [unique, not null]         // PENDING, ACTIVE, ANNULLED, SUSPENDED
 }
+
+Table account_statuses {
+  id integer [primary key, increment]
+  status_name varchar(30) [unique, not null]         // INACTIVE, ACTIVE, FROZEN, CLOSED
+}
+
+Table card_types {
+  id integer [primary key, increment]
+  type_name varchar(30) [unique, not null]           // DEBIT
+}
+
+Table card_statuses {
+  id integer [primary key, increment]
+  status_name varchar(30) [unique, not null]         // INACTIVE, ACTIVE, BLOCKED, CLOSED
+}
+
+Table limit_types {
+  id integer [primary key, increment]
+  limit_name varchar(30) [unique, not null]          // DAILY_TRANSFER, SINGLE_TRANSFER, etc.
+  notes varchar(255)
+  change_policy varchar(20) [not null]               // USER_FULL, USER_LOWER_ONLY, BANK_ONLY
+}
+
+Table transaction_types {
+  id integer [primary key, increment]
+  type_name varchar(30) [unique, not null]           // DEPOSIT, WITHDRAWAL, TRANSFER, INITIAL_TRANSFER, INSTANT_TRANSFER
+}
+
+Table transaction_statuses {
+  id integer [primary key, increment]
+  status_name varchar(30) [unique, not null]         // PENDING, COMPLETED, FAILED, REJECTED, CANCELLED
+}
+
+// ═══════════════════════════════════════════════
+// MAIN TABLES
+// ═══════════════════════════════════════════════
 
 Table users {
   id bigint [primary key, increment]
@@ -26,7 +66,7 @@ Table users {
   profile_picture_url varchar(500)
   password_changed_at timestamp
   gender varchar(1)
-  fiscal_code varchar(16)
+  fiscal_code varchar(16) [unique]
   phone varchar(20)
   residence varchar(200)
   birth_place varchar(100)
@@ -36,59 +76,28 @@ Table users {
   created_at timestamp
 }
 
-Table account_statuses {
-  id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]
-}
-
 Table accounts {
   id bigint [primary key, increment]
   account_number varchar(50) [unique, not null]
-  balance numeric(15,2) [not null]
-  status_id integer [not null]
+  balance numeric(15,2) [not null, default: 0]
+  status_id integer [not null, ref: > account_statuses.id]
   user_id bigint [not null, ref: > users.id]
+  created_at timestamp
   closed_at timestamp
-  created_at timestamp
-  version bigint
+  closure_requested_at timestamp
+  closure_rejected_at timestamp
+  source_account_number varchar(50)
+  initial_amount numeric(15,2)
+  version bigint                                      // @Version optimistic lock
 }
 
-Table limit_types {
-  id integer [primary key, increment]
-  limit_name varchar(30) [unique, not null]
-  notes varchar(255)
-}
-
-Table transaction_types {
-  id integer [primary key, increment]
-  type_name varchar(30) [unique, not null]
-}
-
-Table transaction_statuses {
-  id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]
-}
-
-Table transactions {
+Table account_limits {
   id bigint [primary key, increment]
-  amount numeric(15,2) [not null]
-  type_id integer [not null, ref: > transaction_types.id]
-  status_id integer [not null, ref: > transaction_statuses.id]
-  description varchar(255)
-  source_balance_after numeric(15,2)
-  dest_balance_after numeric(15,2)
-  created_at timestamp
-  source_account_id bigint [ref: > accounts.id]
-  destination_account_id bigint [ref: > accounts.id]
-}
-
-Table card_types {
-  id integer [primary key, increment]
-  type_name varchar(30) [unique, not null]
-}
-
-Table card_statuses {
-  id integer [primary key, increment]
-  status_name varchar(30) [unique, not null]
+  account_id bigint [not null, ref: > accounts.id]
+  limit_type_id integer [not null, ref: > limit_types.id]
+  max_amount numeric(15,2) [not null]
+  updated_at timestamp
+  indexes: unique (account_id, limit_type_id)
 }
 
 Table cards {
@@ -102,24 +111,97 @@ Table cards {
   status_id integer [ref: > card_statuses.id]
 }
 
-Table loans {
+Table transactions {
   id bigint [primary key, increment]
-  account_id bigint [not null]
+  amount numeric(15,2) [not null]
+  type_id integer [not null, ref: > transaction_types.id]
+  status_id integer [not null, ref: > transaction_statuses.id]
+  description varchar(255)
+  source_balance_after numeric(15,2)
+  dest_balance_after numeric(15,2)
+  created_at timestamp
+  scheduled_date timestamp
+  source_account_id bigint [ref: > accounts.id]
+  destination_account_id bigint [ref: > accounts.id]
+}
+
+Table beneficiaries {
+  id bigint [primary key, increment]
+  user_id bigint [not null, ref: > users.id]
+  nickname varchar(100) [not null]
+  beneficiary_name varchar(150)
+  destination_account_number varchar(50) [not null]
+  created_at timestamp
+  indexes: unique (user_id, destination_account_number)
+}
+
+Table notifications {
+  id bigint [primary key, increment]
   user_id bigint [not null]
-  loan_amount numeric(15,2) [not null]
-  interest_rate numeric(5,2) [not null]
-  duration_months integer [not null]
-  monthly_installment numeric(15,2) [not null]
-  status varchar(30) [not null]
+  type varchar(50) [not null]
+  message varchar(500) [not null]
+  message_key varchar(100)
+  message_params varchar(500)
+  is_read boolean [not null, default: false]
+  created_at timestamp [not null]
+}
+
+Table audit_logs {
+  id bigint [primary key, increment]
+  entity_type varchar(50) [not null]
+  entity_id bigint
+  action varchar(50) [not null]
+  performed_by varchar(100) [not null]
+  performed_by_user_id bigint
+  details varchar(500)
+  performed_at timestamp
+}
+
+Table user_pins {
+  id bigint [primary key, increment]
+  user_id bigint [unique, not null, ref: > users.id]
+  pin_hash varchar(255) [not null]
   created_at timestamp
 }
 
-Table requests {
+Table password_change_requests {
   id bigint [primary key, increment]
   user_id bigint [not null]
-  description varchar(255) [not null]
-  status varchar(30) [not null]
-  rejection_reason varchar(255)
-  reviewed_by_user_id bigint
-  created_at timestamp
+  new_plain_password varchar(100) [not null]
+  status varchar(20) [not null]
+  created_at timestamp [not null]
+  processed_at timestamp
 }
+
+// ═══════════════════════════════════════════════
+// STATUS CONSTANTS
+// ═══════════════════════════════════════════════
+
+// AccountStatus:   INACTIVE=1, ACTIVE=2, FROZEN=3, CLOSED=4
+// UserStatus:      PENDING=1, ACTIVE=2, ANNULLED=3, SUSPENDED=4
+// RoleType:        CUSTOMER=1, EMPLOYEE=2, ADMIN=3
+// TransactionType: DEPOSIT=1, WITHDRAWAL=2, TRANSFER=3, INITIAL_TRANSFER=4, INSTANT_TRANSFER=5
+// TransactionStatus: PENDING=1, COMPLETED=2, FAILED=3, REJECTED=4, CANCELLED=5
+
+// ═══════════════════════════════════════════════
+// FOREIGN KEY RELATIONSHIPS
+// ═══════════════════════════════════════════════
+
+// users.role_type_id          → role_types.id
+// users.status_id             → user_statuses.id
+// accounts.user_id            → users.id
+// accounts.status_id          → account_statuses.id
+// account_limits.account_id   → accounts.id
+// account_limits.limit_type_id → limit_types.id
+// cards.account_id            → accounts.id (no explicit JPA rel)
+// cards.card_type_id          → card_types.id
+// cards.status_id             → card_statuses.id
+// transactions.type_id        → transaction_types.id
+// transactions.status_id      → transaction_statuses.id
+// transactions.source_account_id → accounts.id
+// transactions.destination_account_id → accounts.id
+// beneficiaries.user_id       → users.id
+// notifications.user_id       → users.id (no explicit JPA rel)
+// audit_logs.performed_by_user_id → users.id (no explicit JPA rel)
+// user_pins.user_id           → users.id (unique → 1:1)
+// password_change_requests.user_id → users.id (no explicit JPA rel)

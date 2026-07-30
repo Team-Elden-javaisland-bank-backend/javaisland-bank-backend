@@ -62,12 +62,12 @@ public class KeycloakAdminService {
                     tokenUrl, HttpMethod.POST, entity, Map.class);
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                throw new ApiBankException("Autenticazione Keycloak fallita.", "INVALID_CREDENTIALS");
+                throw new ApiBankException("INVALID_CREDENTIALS", "INVALID_CREDENTIALS");
             }
 
             return response.getBody();
         } catch (HttpClientErrorException e) {
-            throw new ApiBankException("Credenziali non valide.", "INVALID_CREDENTIALS");
+            throw new ApiBankException("INVALID_CREDENTIALS", "INVALID_CREDENTIALS");
         }
     }
 

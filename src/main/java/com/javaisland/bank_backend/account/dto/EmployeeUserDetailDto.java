@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @Data
@@ -32,14 +32,14 @@ public class EmployeeUserDetailDto {
     private String birthProvince;
     private String profilePictureUrl;
     private String userStatus;
-    private LocalDateTime userCreatedAt;
+    private OffsetDateTime userCreatedAt;
 
     // Account
     private String accountNumber;
     private BigDecimal balance;
     private String accountStatus;
-    private LocalDateTime accountCreatedAt;
-    private LocalDateTime closedAt;
+    private OffsetDateTime accountCreatedAt;
+    private OffsetDateTime closedAt;
 
     // Cards
     private List<CardSummaryDto> cards;

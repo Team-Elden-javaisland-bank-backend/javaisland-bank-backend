@@ -6,7 +6,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
 @Entity
@@ -97,7 +97,7 @@ public class User {
     private RoleType roleType;
 
     @Column(name = "created_at")
-    private LocalDateTime createdAt = LocalDateTime.now(ZoneId.of("Europe/Rome"));
+    private OffsetDateTime createdAt = OffsetDateTime.now(ZoneId.of("Europe/Rome"));
 
     @Column(name = "limits_setup_complete", nullable = false)
     private boolean limitsSetupComplete = false;
@@ -106,5 +106,5 @@ public class User {
     private String profilePictureUrl;
 
     @Column(name = "password_changed_at")
-    private LocalDateTime passwordChangedAt;
+    private OffsetDateTime passwordChangedAt;
 }

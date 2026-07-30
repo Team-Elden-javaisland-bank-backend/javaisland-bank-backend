@@ -95,8 +95,14 @@ public class EmployeeUserController {
     }
 
     @PutMapping("/password-requests/{requestId}/approve")
-    public ResponseEntity<String> approvePasswordRequest(@PathVariable Long requestId) {
-        passwordChangeService.approveRequest(requestId);
+    public ResponseEntity<String> approvePasswordRequest(
+            @PathVariable Long requestId,
+            @RequestBody Map<String, String> body) {
+        String newPassword = body.get("newPassword");
+        if (newPassword == null || newPassword.isBlank()) {
+            return ResponseEntity.badRequest().body("La nuova password è obbligatoria.");
+        }
+        passwordChangeService.approveRequest(requestId, newPassword);
         return ResponseEntity.ok("Richiesta di cambio password approvata.");
     }
 
@@ -130,25 +136,24 @@ public class EmployeeUserController {
         var passwordRequests = passwordChangeRequestRepository.findAll();
         var limitRequests = limitChangeRequestRepository.findAll();
 
-        var userIds = Stream.concat(
-                passwordRequests.stream().map(PasswordChangeRequest::getUserId),
-                limitRequests.stream().map(LimitChangeRequest::getUserId)
-        ).collect(Collectors.toSet());
+        var userIds = limitRequests.stream()
+                .map(LimitChangeRequest::getUserId)
+                .collect(Collectors.toSet());
 
         Map<Long, User> usersById = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
         passwordRequests.forEach(req -> {
-            User user = usersById.get(req.getUserId());
+            User user = req.getUser();
             all.add(EmployeeRequestDto.builder()
                     .id(req.getId())
                     .type("PASSWORD_CHANGE")
                     .status(req.getStatus())
                     .description("Cambio password richiesto")
-                    .userId(req.getUserId())
-                    .userFirstName(user != null ? user.getFirstName() : null)
-                    .userLastName(user != null ? user.getLastName() : null)
-                    .userEmail(user != null ? user.getEmail() : null)
+                    .userId(user.getId())
+                    .userFirstName(user.getFirstName())
+                    .userLastName(user.getLastName())
+                    .userEmail(user.getEmail())
                     .createdAt(req.getCreatedAt())
                     .processedAt(req.getProcessedAt())
                     .build());

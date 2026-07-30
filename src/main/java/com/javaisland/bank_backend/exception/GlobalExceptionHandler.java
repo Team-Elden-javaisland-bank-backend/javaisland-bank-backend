@@ -11,7 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.Locale;
 
 @RestControllerAdvice
@@ -25,7 +25,7 @@ public class GlobalExceptionHandler {
     }
 
     public record ErrorResponseDto(
-            LocalDateTime timestamp,
+            OffsetDateTime timestamp,
             int status,
             String errorCode,
             String message
@@ -38,7 +38,7 @@ public class GlobalExceptionHandler {
 
         log.warn("Business rule violation: [{}] {}", ex.getErrorCode(), message);
         ErrorResponseDto body = new ErrorResponseDto(
-                LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(), ex.getErrorCode(), message);
+                OffsetDateTime.now(), HttpStatus.BAD_REQUEST.value(), ex.getErrorCode(), message);
         return ResponseEntity.badRequest()
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body);
@@ -54,7 +54,7 @@ public class GlobalExceptionHandler {
 
         log.warn("Validation failed: {}", fieldErrors);
         ErrorResponseDto body = new ErrorResponseDto(
-                LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", fieldErrors);
+                OffsetDateTime.now(), HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", fieldErrors);
         return ResponseEntity.badRequest()
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body);
@@ -70,7 +70,7 @@ public class GlobalExceptionHandler {
 
         log.warn("Entity validation failed: {}", violations);
         ErrorResponseDto body = new ErrorResponseDto(
-                LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", violations);
+                OffsetDateTime.now(), HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", violations);
         return ResponseEntity.badRequest()
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body);
@@ -83,7 +83,7 @@ public class GlobalExceptionHandler {
 
         log.error("Unexpected error", ex);
         ErrorResponseDto body = new ErrorResponseDto(
-                LocalDateTime.now(), HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                OffsetDateTime.now(), HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 "INTERNAL_ERROR", message);
         return ResponseEntity.internalServerError()
                 .contentType(MediaType.APPLICATION_JSON)

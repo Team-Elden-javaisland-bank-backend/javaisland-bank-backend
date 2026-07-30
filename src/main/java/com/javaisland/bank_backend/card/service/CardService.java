@@ -49,9 +49,9 @@ public class CardService {
     @Transactional
     public Card issueDebitCard(Long accountId, String holderName, String statusName) {
         var debitType = cardTypeRepository.findByTypeName("DEBIT")
-                .orElseThrow(() -> new ApiBankException("Tipo carta DEBIT non configurato."));
+                .orElseThrow(() -> new ApiBankException("CARD_TYPE_NOT_FOUND", "CARD_TYPE_NOT_FOUND"));
         var status = cardStatusRepository.findByStatusName(statusName)
-                .orElseThrow(() -> new ApiBankException("Stato carta " + statusName + " non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
 
         Card card = new Card();
         card.setAccountId(accountId);
@@ -68,7 +68,7 @@ public class CardService {
     @Transactional
     public void activateCardsByAccountId(Long accountId) {
         var activeStatus = cardStatusRepository.findByStatusName("ACTIVE")
-                .orElseThrow(() -> new ApiBankException("Stato carta ACTIVE non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         cardRepository.findByAccountId(accountId).forEach(card -> {
             if (!card.getStatus().getStatusName().equals("BLOCKED")) {
                 card.setStatus(activeStatus);
@@ -85,7 +85,7 @@ public class CardService {
     @Transactional
     public void blockCardsByAccountId(Long accountId) {
         var blockedStatus = cardStatusRepository.findByStatusName("BLOCKED")
-                .orElseThrow(() -> new ApiBankException("Stato carta BLOCKED non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         cardRepository.findByAccountId(accountId).forEach(card -> {
             if (!card.getStatus().getStatusName().equals("BLOCKED")) {
                 card.setStatus(blockedStatus);
@@ -97,7 +97,7 @@ public class CardService {
     @Transactional
     public void closeCardsByAccountId(Long accountId) {
         var closedStatus = cardStatusRepository.findByStatusName("CLOSED")
-                .orElseThrow(() -> new ApiBankException("Stato carta CLOSED non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         cardRepository.findByAccountId(accountId).forEach(card -> {
             if (!card.getStatus().getStatusName().equals("CLOSED")) {
                 card.setStatus(closedStatus);
@@ -109,7 +109,7 @@ public class CardService {
     @Transactional
     public void unblockCardsByAccountId(Long accountId) {
         var activeStatus = cardStatusRepository.findByStatusName("ACTIVE")
-                .orElseThrow(() -> new ApiBankException("Stato carta ACTIVE non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         cardRepository.findByAccountId(accountId).forEach(card -> {
             card.setStatus(activeStatus);
             cardRepository.save(card);
@@ -119,17 +119,17 @@ public class CardService {
     @Transactional
     public Card updateCardStatus(Long cardId, String newStatusName) {
         Card card = cardRepository.findById(cardId)
-                .orElseThrow(() -> new ApiBankException("Carta non trovata con questo ID."));
+                .orElseThrow(() -> new ApiBankException("CARD_NOT_FOUND", "CARD_NOT_FOUND"));
 
         var blockedStatus = cardStatusRepository.findByStatusName("BLOCKED")
-                .orElseThrow(() -> new ApiBankException("Stato carta BLOCKED non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
 
         if (card.getStatus().getId().equals(blockedStatus.getId())) {
-            throw new ApiBankException("Impossibile modificare lo stato: la carta è BLOCCATA definitivamente.");
+            throw new ApiBankException("CARD_BLOCKED_PERMANENT", "CARD_BLOCKED_PERMANENT");
         }
 
         var newStatus = cardStatusRepository.findByStatusName(newStatusName)
-                .orElseThrow(() -> new ApiBankException("Stato carta '" + newStatusName + "' non valido."));
+                .orElseThrow(() -> new ApiBankException("CARD_INVALID_STATUS", "CARD_INVALID_STATUS"));
 
         card.setStatus(newStatus);
         Card saved = cardRepository.save(card);
@@ -144,10 +144,10 @@ public class CardService {
     @Transactional
     public Card unblockCard(Long cardId) {
         Card card = cardRepository.findById(cardId)
-                .orElseThrow(() -> new ApiBankException("Carta non trovata con questo ID."));
+                .orElseThrow(() -> new ApiBankException("CARD_NOT_FOUND", "CARD_NOT_FOUND"));
 
         var activeStatus = cardStatusRepository.findByStatusName("ACTIVE")
-                .orElseThrow(() -> new ApiBankException("Stato carta ACTIVE non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
 
         card.setStatus(activeStatus);
         Card saved = cardRepository.save(card);

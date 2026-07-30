@@ -1,8 +1,9 @@
 package com.javaisland.bank_backend.notification.model;
 
+import com.javaisland.bank_backend.user.model.User;
 import jakarta.persistence.*;
 import lombok.*;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
 @Entity
@@ -14,8 +15,9 @@ public class Notification {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_id", nullable = false)
-    private Long userId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
     @Column(nullable = false, length = 50)
     private String type;
@@ -35,5 +37,5 @@ public class Notification {
 
     @Column(name = "created_at", nullable = false)
     @Builder.Default
-    private LocalDateTime createdAt = LocalDateTime.now(ZoneId.of("Europe/Rome"));
+    private OffsetDateTime createdAt = OffsetDateTime.now(ZoneId.of("Europe/Rome"));
 }

@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @Builder
@@ -18,5 +18,5 @@ public class PendingRegistrationDto {
     private LocalDate birthDate;
     private String email;
     private String profilePictureUrl;
-    private LocalDateTime registeredAt;
+    private OffsetDateTime registeredAt;
 }

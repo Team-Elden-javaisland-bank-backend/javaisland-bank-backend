@@ -11,7 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @RestController
@@ -31,7 +31,7 @@ public class AdminTransactionController {
         private String description;
         private String sourceAccountNumber;
         private String destinationAccountNumber;
-        private LocalDateTime createdAt;
+        private OffsetDateTime createdAt;
     }
 
     @GetMapping
@@ -39,9 +39,9 @@ public class AdminTransactionController {
             @RequestParam(required = false) Integer recentDays,
             @RequestParam(required = false) Integer typeId) {
 
-        LocalDateTime since = recentDays != null
-                ? LocalDateTime.now().minusDays(recentDays)
-                : LocalDateTime.now().minusDays(30);
+        OffsetDateTime since = recentDays != null
+                ? OffsetDateTime.now().minusDays(recentDays)
+                : OffsetDateTime.now().minusDays(30);
 
         List<Transaction> transactions;
         if (typeId != null) {

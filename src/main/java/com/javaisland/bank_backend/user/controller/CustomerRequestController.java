@@ -36,7 +36,7 @@ public class CustomerRequestController {
 
         List<CustomerRequestDto> all = new ArrayList<>();
 
-        passwordChangeRequestRepository.findByUserIdOrderByCreatedAtDesc(userId)
+        passwordChangeRequestRepository.findByUser_IdOrderByCreatedAtDesc(userId)
                 .forEach(req -> all.add(CustomerRequestDto.builder()
                         .id(req.getId())
                         .type("PASSWORD_CHANGE")

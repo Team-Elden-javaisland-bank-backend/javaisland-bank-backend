@@ -11,6 +11,9 @@ public class BeneficiaryRequestDto {
     @Size(max = 100)
     private String nickname;
 
+    @Size(max = 150)
+    private String beneficiaryName;
+
     @NotBlank(message = "Il numero del conto di destinazione è obbligatorio")
     private String destinationAccountNumber;
 }

@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @Builder
@@ -19,8 +19,8 @@ public class TransactionResponseDto {
     private String typeName;
     private String statusName;
     private String description;
-    private LocalDateTime createdAt;
-    private LocalDateTime scheduledDate;
+    private OffsetDateTime createdAt;
+    private OffsetDateTime scheduledDate;
     private String sourceAccountNumber;
     private String destinationAccountNumber;
     private String sourceUserName;

@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "accounts")
@@ -33,16 +33,16 @@ public class Account {
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     @Column(name = "closed_at")
-    private LocalDateTime closedAt;
+    private OffsetDateTime closedAt;
 
     @Column(name = "closure_requested_at")
-    private LocalDateTime closureRequestedAt;
+    private OffsetDateTime closureRequestedAt;
 
     @Column(name = "closure_rejected_at")
-    private LocalDateTime closureRejectedAt;
+    private OffsetDateTime closureRejectedAt;
 
     @Column(name = "source_account_number", length = 50)
     private String sourceAccountNumber;

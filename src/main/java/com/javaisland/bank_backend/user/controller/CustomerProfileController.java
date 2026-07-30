@@ -29,7 +29,9 @@ public class CustomerProfileController {
     public ResponseEntity<CustomerProfileDto> getMyProfile(@AuthenticationPrincipal Jwt jwt) {
         User user = securityUtil.getUser(jwt);
 
-        var accounts = accountRepository.findByUserId(user.getId());
+        var accounts = accountRepository.findByUserId(user.getId()).stream()
+                .filter(a -> a.getStatusId() != AccountStatus.CLOSED)
+                .toList();
         int totalAccounts = accounts.size();
         int activeAccounts = (int) accounts.stream()
                 .filter(a -> a.getStatusId() == AccountStatus.ACTIVE)

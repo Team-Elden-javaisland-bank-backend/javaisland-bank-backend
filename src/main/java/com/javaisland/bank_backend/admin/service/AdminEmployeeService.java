@@ -63,21 +63,22 @@ public class AdminEmployeeService {
 
     @Transactional
     public EmployeeListItemDto createEmployee(CreateEmployeeRequestDto request) {
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+        String email = request.getEmail().toLowerCase();
+        if (userRepository.findByEmail(email).isPresent()) {
             throw new ApiBankException("Email già registrata.", "EMAIL_EXISTS");
         }
 
         var employeeRole = roleTypeRepository.findByRoleName("D")
                 .orElseThrow(() -> new ApiBankException("Ruolo D non configurato.", "ROLE_NOT_FOUND"));
         var activeStatus = userStatusRepository.findByUserStatus("ACTIVE")
-                .orElseThrow(() -> new ApiBankException("Stato ACTIVE non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
 
         String keycloakId;
         try {
             keycloakId = keycloakAdminService.createUser(
-                    request.getEmail(),
+                    email,
                     request.getPassword(),
-                    request.getEmail(),
+                    email,
                     request.getFirstName(),
                     request.getLastName(),
                     true);
@@ -95,8 +96,8 @@ public class AdminEmployeeService {
         User user = new User();
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
-        user.setEmail(request.getEmail());
-        user.setUsername(request.getEmail());
+        user.setEmail(email);
+        user.setUsername(email);
         user.setKeycloakId(keycloakId);
         user.setRoleType(employeeRole);
         user.setStatus(activeStatus);
@@ -110,7 +111,7 @@ public class AdminEmployeeService {
         user.setFiscalCode("N/AEMPLOYEE00000");
         user = userRepository.save(user);
 
-        log.info("Admin created employee: id={}, email={}", user.getId(), request.getEmail());
+        log.info("Admin created employee: id={}, email={}", user.getId(), email);
 
         return EmployeeListItemDto.builder()
                 .userId(user.getId())
@@ -136,7 +137,7 @@ public class AdminEmployeeService {
         }
 
         var suspendedStatus = userStatusRepository.findByUserStatus("SUSPENDED")
-                .orElseThrow(() -> new ApiBankException("Stato SUSPENDED non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         user.setStatus(suspendedStatus);
         userRepository.save(user);
 
@@ -160,7 +161,7 @@ public class AdminEmployeeService {
         }
 
         var activeStatus = userStatusRepository.findByUserStatus("ACTIVE")
-                .orElseThrow(() -> new ApiBankException("Stato ACTIVE non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         user.setStatus(activeStatus);
         userRepository.save(user);
 

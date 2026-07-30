@@ -17,7 +17,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.util.Map;
 import java.util.Optional;
 
@@ -54,7 +53,7 @@ public class JwtPasswordChangeFilter extends OncePerRequestFilter {
                     }
 
                     if (user.getPasswordChangedAt() != null
-                            && tokenIssuedAt.isBefore(user.getPasswordChangedAt().atZone(ZoneId.of("Europe/Rome")).toInstant())) {
+                            && tokenIssuedAt.isBefore(user.getPasswordChangedAt().toInstant())) {
                         log.warn("Rejected token for user id={}: token issued at {} but password changed at {}",
                                 user.getId(), tokenIssuedAt, user.getPasswordChangedAt());
                         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

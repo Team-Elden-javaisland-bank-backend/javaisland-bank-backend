@@ -241,15 +241,10 @@ File: docker-compose.yml
         id                  BIGSERIAL PK
         user_id             FK -> users
         nickname            VARCHAR(100) NOT NULL
+        beneficiary_name    VARCHAR(150)
         destination_account_number VARCHAR(50) NOT NULL
         created_at          TIMESTAMP
         UNIQUE(user_id, destination_account_number)
-
-    saved_beneficiaries
-        id                  INTEGER PK
-        beneficiary_name    VARCHAR(150) NOT NULL
-        account_number      VARCHAR(50) NOT NULL
-        user_id             FK -> users
 
     notifications
         id                  BIGSERIAL PK
@@ -274,7 +269,6 @@ File: docker-compose.yml
     password_change_requests
         id                  BIGSERIAL PK
         user_id             BIGINT NOT NULL
-        new_plain_password  VARCHAR(100) NOT NULL
         status              VARCHAR(20) NOT NULL
         created_at          TIMESTAMP
         processed_at        TIMESTAMP
@@ -301,7 +295,6 @@ File: docker-compose.yml
     users ──┬── accounts ──┬── account_limits (6 tipi)
             │              └── cards (DEBIT/CREDIT)
             ├── beneficiaries
-            ├── saved_beneficiaries
             ├── notifications
             ├── password_change_requests
             └── user_pins
@@ -516,7 +509,6 @@ PARTE BACKEND
         ├── employee/         # Endpoint dipendente
         ├── exception/        # Error handling
         ├── notification/     # Notifiche
-        ├── savedbeneficiary/ # Beneficiari salvati
         ├── security/         # JWT security
         ├── transaction/      # Transazioni
         ├── user/             # Utenti
@@ -745,11 +737,8 @@ PARTE BACKEND
         GET     /api/v1/customer/beneficiaries                Lista
         POST    /api/v1/customer/beneficiaries                Aggiungi
         DELETE  /api/v1/customer/beneficiaries/{id}           Elimina
-
-    Beneficiari salvati:
-        GET     /api/v1/customer/saved-beneficiaries          Lista salvati
-        POST    /api/v1/customer/saved-beneficiaries          Salva
-        DELETE  /api/v1/customer/saved-beneficiaries/{id}     Elimina
+        GET     /api/v1/customer/beneficiaries/check          Verifica esistenza
+        PUT     /api/v1/customer/beneficiaries/{id}/rename    Rinomina
 
     Profilo:
         GET     /api/v1/customer/profile                      Profilo completo
@@ -952,7 +941,6 @@ PARTE FRONTEND
         /beneficiaries  CustomerBeneficiariesComponent
         /limits         CustomerLimitsComponent
         /cards          CustomerCardsComponent
-        /saved-beneficiaries  CustomerSavedBeneficiariesComponent
         /profile        CustomerProfileComponent
         /requests       CustomerRequestsComponent
         /notifications  CustomerNotificationsComponent
@@ -1054,7 +1042,6 @@ PARTE FRONTEND
         Cards: getCards(), getCardDetail(), getCardSensitive()
         Beneficiaries: getBeneficiaries(), saveBeneficiary(), deleteBeneficiary(),
                        checkBeneficiary(), renameBeneficiary()
-        Saved: getSavedBeneficiaries(), saveSavedBeneficiary(), deleteSavedBeneficiary()
 
     EmployeeService (285 lines)
         API: http://localhost:8081/api/v1/employee
@@ -1143,9 +1130,8 @@ PARTE FRONTEND
     CustomerAccountsComponent   Lista conti, apertura nuovo conto
     CustomerAccountDetailComponent  Dettaglio conto, saldo, movimenti, limiti
     CustomerTransactionsComponent   Deposito, prelievo, bonifico, storico paginato
-    CustomerBeneficiariesComponent  CRUD beneficiari
+    CustomerBeneficiariesComponent  CRUD beneficiari (interni + esterni IBAN libero)
     CustomerCardsComponent      Lista carte, dettaglio, reveal CVV
-    CustomerSavedBeneficiariesComponent  Beneficiari salvati per bonifici rapidi
     CustomerLimitsComponent     Visualizzazione + modifica limiti operativi
     CustomerLimitsSetupComponent   Setup iniziale obbligatorio 6 limiti
     CustomerProfileComponent    Dati personali, foto profilo, cambio password, PDF

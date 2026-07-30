@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @Repository
@@ -14,10 +14,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
     List<AuditLog> findByActionOrderByPerformedAtDesc(String action);
 
-    List<AuditLog> findByPerformedAtBetweenOrderByPerformedAtDesc(LocalDateTime from, LocalDateTime to);
+    List<AuditLog> findByPerformedAtBetweenOrderByPerformedAtDesc(OffsetDateTime from, OffsetDateTime to);
 
-    List<AuditLog> findByActionAndPerformedAtBetweenOrderByPerformedAtDesc(String action, LocalDateTime from, LocalDateTime to);
+    List<AuditLog> findByActionAndPerformedAtBetweenOrderByPerformedAtDesc(String action, OffsetDateTime from, OffsetDateTime to);
 
     @Query("SELECT a FROM AuditLog a WHERE a.performedAt >= :from ORDER BY a.performedAt DESC")
-    List<AuditLog> findRecentLogs(@Param("from") LocalDateTime from);
+    List<AuditLog> findRecentLogs(@Param("from") OffsetDateTime from);
 }

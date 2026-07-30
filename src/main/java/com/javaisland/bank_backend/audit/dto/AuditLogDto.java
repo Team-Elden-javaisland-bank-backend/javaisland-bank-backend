@@ -2,7 +2,7 @@ package com.javaisland.bank_backend.audit.dto;
 
 import lombok.Builder;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Builder
 public record AuditLogDto(
@@ -12,6 +12,7 @@ public record AuditLogDto(
     String action,
     String performedBy,
     Long performedByUserId,
+    String performedByUserEmail,
     String details,
-    LocalDateTime performedAt
+    OffsetDateTime performedAt
 ) {}

@@ -10,7 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @Repository
@@ -28,14 +28,14 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             @Param("accountId") Long accountId,
             @Param("typeId") Integer typeId,
             @Param("statusId") Integer statusId,
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
+            @Param("start") OffsetDateTime start,
+            @Param("end") OffsetDateTime end);
 
-    List<Transaction> findByStatusIdAndScheduledDateLessThanEqual(Integer statusId, LocalDateTime scheduledDate);
+    List<Transaction> findByStatusIdAndScheduledDateLessThanEqual(Integer statusId, OffsetDateTime scheduledDate);
 
-    List<Transaction> findByTypeIdAndCreatedAtAfter(Integer typeId, LocalDateTime since, Pageable pageable);
+    List<Transaction> findByTypeIdAndCreatedAtAfter(Integer typeId, OffsetDateTime since, Pageable pageable);
 
-    List<Transaction> findByCreatedAtAfter(LocalDateTime since, Pageable pageable);
+    List<Transaction> findByCreatedAtAfter(OffsetDateTime since, Pageable pageable);
 
     @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
            "WHERE t.destinationAccount.id = :accountId " +
@@ -43,8 +43,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
            "AND t.createdAt BETWEEN :start AND :end")
     BigDecimal sumInflowByAccountBetween(@Param("accountId") Long accountId,
                                          @Param("statusId") Integer statusId,
-                                         @Param("start") LocalDateTime start,
-                                         @Param("end") LocalDateTime end);
+                                         @Param("start") OffsetDateTime start,
+                                         @Param("end") OffsetDateTime end);
 
     @Query("SELECT COUNT(t) FROM Transaction t " +
            "WHERE (t.sourceAccount.id = :accountId OR t.destinationAccount.id = :accountId) " +
@@ -52,6 +52,6 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
            "AND t.createdAt BETWEEN :start AND :end")
     Long countByAccountBetween(@Param("accountId") Long accountId,
                                @Param("statusId") Integer statusId,
-                               @Param("start") LocalDateTime start,
-                               @Param("end") LocalDateTime end);
+                               @Param("start") OffsetDateTime start,
+                               @Param("end") OffsetDateTime end);
 }

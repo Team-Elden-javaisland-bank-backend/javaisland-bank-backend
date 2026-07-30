@@ -29,7 +29,8 @@ import com.javaisland.bank_backend.transaction.repository.TransactionRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -126,7 +127,7 @@ public class AccountService {
             throw new ApiBankException("Il conto " + accountNumber + " appartiene a una registrazione in corso. Impossibile rifiutare.", "REGISTRATION_ACCOUNT");
         }
         account.setStatusId(AccountStatus.CLOSED);
-        account.setClosedAt(LocalDateTime.now());
+        account.setClosedAt(OffsetDateTime.now());
         account.setSourceAccountNumber(null);
         account.setInitialAmount(null);
         accountRepository.save(account);
@@ -165,7 +166,7 @@ public class AccountService {
             throw new ApiBankException("Non è possibile chiudere un conto che ha un trasferimento in sospeso verso un altro conto.", "PENDING_TRANSFER");
         }
         account.setStatusId(AccountStatus.FROZEN);
-        account.setClosureRequestedAt(LocalDateTime.now());
+        account.setClosureRequestedAt(OffsetDateTime.now());
         accountRepository.save(account);
         cardService.blockCardsByAccountId(account.getId());
         notificationService.send(userId, "ACCOUNT", "Richiesta di chiusura conto " + accountNumber + " inviata. In attesa di approvazione.", "NOTIF_CLOSURE_REQUESTED", "[\"" + accountNumber + "\"]");
@@ -180,7 +181,7 @@ public class AccountService {
         }
         account.setStatusId(AccountStatus.ACTIVE);
         account.setClosureRequestedAt(null);
-        account.setClosureRejectedAt(LocalDateTime.now());
+        account.setClosureRejectedAt(OffsetDateTime.now());
         accountRepository.save(account);
         cardService.unblockCardsByAccountId(account.getId());
         notificationService.send(account.getUser().getId(), "ACCOUNT", "La richiesta di chiusura del conto " + accountNumber + " è stata rifiutata.", "NOTIF_CLOSURE_REJECTED", "[\"" + accountNumber + "\"]");
@@ -212,7 +213,7 @@ public class AccountService {
         account.setStatusId(AccountStatus.ACTIVE);
         account.setClosureRequestedAt(null);
         if (hadClosureRequest) {
-            account.setClosureRejectedAt(LocalDateTime.now());
+            account.setClosureRejectedAt(OffsetDateTime.now());
         }
         accountRepository.save(account);
         cardService.unblockCardsByAccountId(account.getId());
@@ -238,7 +239,7 @@ public class AccountService {
             throw new ApiBankException("Impossibile chiudere il conto " + accountNumber + ": il saldo deve essere zero.", "NON_ZERO_BALANCE");
         }
         account.setStatusId(AccountStatus.CLOSED);
-        account.setClosedAt(LocalDateTime.now());
+        account.setClosedAt(OffsetDateTime.now());
         account.setClosureRequestedAt(null);
         accountRepository.save(account);
         cardService.closeCardsByAccountId(account.getId());
@@ -314,8 +315,8 @@ public class AccountService {
         LocalDate today = LocalDate.now();
         LocalDate startOfMonth = today.withDayOfMonth(1);
         LocalDate endOfMonth = today.withDayOfMonth(today.lengthOfMonth());
-        LocalDateTime start = startOfMonth.atStartOfDay();
-        LocalDateTime end = endOfMonth.atTime(23, 59, 59);
+        OffsetDateTime start = startOfMonth.atStartOfDay(ZoneId.of("Europe/Rome")).toOffsetDateTime();
+        OffsetDateTime end = endOfMonth.atTime(23, 59, 59).atZone(ZoneId.of("Europe/Rome")).toOffsetDateTime();
 
         Long accountId = account.getId();
         BigDecimal income = transactionRepository.sumInflowByAccountBetween(accountId, TransactionStatus.COMPLETED, start, end);
@@ -405,7 +406,7 @@ public class AccountService {
     @Transactional(readOnly = true)
     public EmployeeUserDetailDto getEmployeeUserDetailByUserId(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato con id: " + userId));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         Optional<Account> accountOpt = accountRepository.findByUserId(userId).stream().findFirst();
 

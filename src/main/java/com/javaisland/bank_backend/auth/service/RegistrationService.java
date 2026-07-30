@@ -27,23 +27,24 @@ public class RegistrationService {
 
     @Transactional(propagation = Propagation.REQUIRED)
     public User createPendingUser(RegisterRequestDto request) {
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+        String email = request.getEmail().toLowerCase();
+        if (userRepository.findByEmail(email).isPresent()) {
             throw new ApiBankException("Email già registrata.", "EMAIL_ALREADY_REGISTERED");
         }
-        if (userRepository.findByUsername(request.getEmail()).isPresent()) {
+        if (userRepository.findByUsername(email).isPresent()) {
             throw new ApiBankException("Username già registrato.", "USERNAME_ALREADY_REGISTERED");
         }
         var customerRole = roleTypeRepository.findByRoleName("C")
-                .orElseThrow(() -> new ApiBankException("Ruolo C non configurato."));
+                .orElseThrow(() -> new ApiBankException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND"));
         var pendingStatus = userStatusRepository.findByUserStatus("PENDING")
-                .orElseThrow(() -> new ApiBankException("Stato PENDING non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
 
         String keycloakId;
         try {
             keycloakId = keycloakAdminService.createUser(
-                    request.getEmail(),
+                    email,
                     request.getPassword(),
-                    request.getEmail(),
+                    email,
                     request.getFirstName(),
                     request.getLastName(),
                     false);
@@ -58,8 +59,8 @@ public class RegistrationService {
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
         user.setBirthDate(request.getBirthDate());
-        user.setEmail(request.getEmail());
-        user.setUsername(request.getEmail());
+        user.setEmail(email);
+        user.setUsername(email);
         user.setRoleType(customerRole);
         user.setStatus(pendingStatus);
         user.setProfession(request.getProfession());
@@ -75,7 +76,7 @@ public class RegistrationService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void annulUser(Long userId) {
         var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
-                .orElseThrow(() -> new ApiBankException("Stato ANNULLED non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         userRepository.findById(userId).ifPresent(u -> {
             if (u.getKeycloakId() != null) {
                 keycloakAdminService.deleteUser(u.getKeycloakId());
@@ -122,7 +123,7 @@ public class RegistrationService {
                 .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
 
         var pendingStatus = userStatusRepository.findByUserStatus("PENDING")
-                .orElseThrow(() -> new ApiBankException("Stato PENDING non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         if (!user.getStatus().getId().equals(pendingStatus.getId())) {
             throw new ApiBankException("La registrazione non è in stato PENDING.", "INVALID_STATE");
         }
@@ -132,7 +133,7 @@ public class RegistrationService {
         }
 
         var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
-                .orElseThrow(() -> new ApiBankException("Stato ANNULLED non configurato."));
+                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         user.setStatus(annulledStatus);
         userRepository.save(user);
         log.info("Registration cancelled for user id={}", userId);

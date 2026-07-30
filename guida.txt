@@ -1,0 +1,102 @@
+Ecco il piano completo. **4 macro-aree**, ognuna con file coinvolti e cosa fare.
+
+---
+
+## PIANO REFACTORING
+
+### 1. Unione `saved_beneficiaries` → `beneficiaries`
+
+**Cosa**: la tabella `saved_beneficiaries` ha solo `beneficiary_name` in piu, il resto e identico. Unisco in `beneficiaries` aggiungendo colonna `beneficiary_name`, elimino intero package e tutte le route.
+
+**Files BACKEND da modificare:**
+- `beneficiary/model/Beneficiary.java` — aggiungi campo `beneficiaryName` (nullable, per beneficiari esterni)
+- `beneficiary/dto/BeneficiaryRequestDto.java` — aggiungi campo `beneficiaryName` opzionale
+- `beneficiary/dto/BeneficiaryResponseDto.java` — aggiungi `beneficiaryName`
+- `beneficiary/service/BeneficiaryService.java` — integra logica `SavedBeneficiaryService` (accetta IBAN esterni, nessun controllo esistenza conto)
+- `beneficiary/controller/BeneficiaryController.java` — aggiungi endpoint per beneficiari esterni? No, stesso endpoint unificato
+- `beneficiary/repository/BeneficiaryRepository.java` — nessuna modifica necessaria
+
+**Files da ELIMINARE (intero package `savedbeneficiary/`):**
+- `savedbeneficiary/model/SavedBeneficiary.java`
+- `savedbeneficiary/dto/SavedBeneficiaryRequestDto.java`
+- `savedbeneficiary/dto/SavedBeneficiaryResponseDto.java`
+- `savedbeneficiary/repository/SavedBeneficiaryRepository.java`
+- `savedbeneficiary/service/SavedBeneficiaryService.java`
+- `savedbeneficiary/controller/SavedBeneficiaryController.java`
+
+**Files FRONTEND da modificare:**
+- `core/models/beneficiary/` — aggiorna interfacce con `beneficiaryName`
+- `core/models/saved-beneficiary/` — ELIMINA cartella
+- `core/services/customer.service.ts` — unisci metodi `savedBeneficiary*` in `beneficiary*`, aggiorna URL endpoint
+- `pages/customer/customer-beneficiaries.*` — integra visualizzazione beneficiari salvati
+- `pages/customer/customer-saved-beneficiaries.*` — ELIMINA componente
+
+---
+
+### 2. Rimozione `new_plain_password` da `PasswordChangeRequest`
+
+**Cosa**: la password in chiaro e una vulnerabilita grave. Sostituisco con `token_hash` (hash dell'UUID inviato al richiedente). Alternativa: uso direttamente Keycloak password reset API (invia email). Opzione pragmatica: genero token UUID, salvo hash, mostro token al frontend, dipendente lo usa per approvare.
+
+**Files BACKEND:**
+- `user/model/PasswordChangeRequest.java` — rimuovi `newPlainPassword` (sicurezza: nessuna password in DB), aggiungi `@ManyToOne` user
+- `user/dto/PasswordChangeRequestDto.java` — rimuovi `newPlainPassword`
+- `user/dto/PasswordChangeRequestCreateDto.java` — non più usato (customer non invia password)
+- `user/service/PasswordChangeService.java` — `requestPasswordChange()` senza password; `approveRequest(Long requestId, String newPassword)` invia a Keycloak via `keycloakAdminService.resetPassword()`
+- `user/controller/PasswordChangeController.java` — `requestPasswordChange()` senza body
+- `employee/controller/EmployeeUserController.java` — approve endpoint accetta `{"newPassword": "..."}`
+
+**Files FRONTEND:**
+- Modelli `password-change-request` — aggiorna DTO
+- `customer-requests.html` / `.ts` — aggiorna vista se mostrava nuova password
+
+---
+
+### 3. `LocalDateTime` → `OffsetDateTime` (timestamptz)
+
+**Cosa**: tutti i campi data/ora diventano `OffsetDateTime` in Java, `timestamptz` su DB. Questo coinvolge ~10 entita e ~20 DTO.
+
+**Entities** (cambiare `LocalDateTime` → `OffsetDateTime`, `@CreationTimestamp` → verificarne compatibilita):
+- `Account.java` — `createdAt`, `closedAt`, `closureRequestedAt`, `closureRejectedAt`
+- `AccountLimit.java` — `updatedAt`
+- `Transaction.java` — `createdAt`, `scheduledDate`
+- `User.java` — `createdAt`, `passwordChangedAt`
+- `UserPin.java` — `createdAt`
+- `PasswordChangeRequest.java` — `createdAt`, `processedAt`
+- `Notification.java` — `createdAt`
+- `AuditLog.java` — `performedAt`
+- `Beneficiary.java` — `createdAt`
+- `LimitChangeRequest.java` — `createdAt`, `processedAt`
+
+**DTOs con LocalDateTime:**
+- `AccountResponseDto`, `TransactionResponseDto`, `BeneficiaryResponseDto`, `PasswordChangeRequestDto`, `EmployeeRequestDto`, `NotificationDto`, `AuditLogDto`, `MonthlySummaryDto`, `CustomerRequestDto`, `LimitChangeRequest`, `EmployeeUserDetailDto`
+
+**Services con date logic:**
+- `TransactionService.java` — query intervallo date, scheduled transfer comparison
+- `ScheduledTransferProcessor.java` — confronto scheduledDate
+- `AccountService.java` — closure timestamps
+- `PasswordChangeService.java` — date handling
+- `NotificationService.java` — date handling
+
+---
+
+### 4. FK esplicite per `notifications`, `audit_logs`, `password_change_requests`
+
+**Cosa**: aggiungere `@ManyToOne` + `@JoinColumn` dove ora c'e solo un `Long userId` implicito. Questo da integrita referenziale JPA e permette join espliciti.
+
+**Entities:**
+- `Notification.java` — cambia `private Long userId` → `@ManyToOne @JoinColumn User user`
+- `AuditLog.java` — cambia `private Long performedByUserId` → `@ManyToOne @JoinColumn User performedBy`
+- `PasswordChangeRequest.java` — cambia `private Long userId` → `@ManyToOne @JoinColumn User user`
+- `Card.java` — cambia `private Long accountId` → `@ManyToOne @JoinColumn Account account`
+- `Transaction.java` — aggiungi `@ManyToOne` per `typeId` e `statusId`
+- `Account.java` — aggiungi `@ManyToOne` per `statusId` → `AccountStatus`
+
+---
+
+**RIEPILOGO**: ~50 file backend + ~10 file frontend. Ordine esecuzione consigliato:
+1. FK esplicite (4) — cambi localizzati, basso rischio
+2. `OffsetDateTime` (3) — massiccio ma meccanico, molti file
+3. Password token (2) — richiede attenzione al flusso
+4. Unione beneficiaries (1) — elimina intero package
+
+**Procedo?** Se si, dimmi se vuoi che esegua tutto in una volta o area per area. In ogni caso, dopo ogni area faccio `mvn compile` + `npm build` per verificare.
