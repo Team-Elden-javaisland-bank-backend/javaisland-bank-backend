@@ -1,7 +1,9 @@
 package com.javaisland.bank_backend.user.controller;
 
 import com.javaisland.bank_backend.common.SecurityUtil;
+import com.javaisland.bank_backend.user.dto.PasswordChangeRequestInputDto;
 import com.javaisland.bank_backend.user.service.PasswordChangeService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,11 +21,13 @@ public class PasswordChangeController {
     private final SecurityUtil securityUtil;
 
     @PostMapping
-    public ResponseEntity<String> requestPasswordChange(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<Void> requestPasswordChange(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody PasswordChangeRequestInputDto dto) {
 
         var user = securityUtil.getUser(jwt);
 
-        passwordChangeService.requestPasswordChange(user.getId());
-        return ResponseEntity.ok("Richiesta di cambio password inviata. In attesa di approvazione.");
+        passwordChangeService.requestPasswordChange(user.getId(), dto);
+        return ResponseEntity.ok().build();
     }
 }

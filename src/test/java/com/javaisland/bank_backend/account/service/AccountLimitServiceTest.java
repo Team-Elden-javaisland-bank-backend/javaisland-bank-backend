@@ -90,6 +90,96 @@ class AccountLimitServiceTest {
     }
 
     @Test
+    void setLimitAsCustomer_bypassesBankOnlyDuringInitialSetup() {
+        var user = new com.javaisland.bank_backend.user.model.User();
+        user.setId(99L);
+        user.setLimitsSetupComplete(true);
+        var account = new Account(); account.setId(1L); account.setAccountNumber("IT123");
+        account.setUser(user);
+        account.setIsLimitsConfigured(false);
+
+        var limitType = new LimitType(1, "INSTANT_TRANSFER_SINGLE", "desc", LimitType.ChangePolicy.BANK_ONLY);
+        var existing = new AccountLimit(); existing.setMaxAmount(new BigDecimal("1000"));
+        var request = new SetLimitRequestDto(); request.setMaxAmount(new BigDecimal("5000"));
+
+        when(accountRepository.findByAccountNumber("IT123")).thenReturn(Optional.of(account));
+        when(limitTypeRepository.findByLimitName("INSTANT_TRANSFER_SINGLE")).thenReturn(Optional.of(limitType));
+        when(accountLimitRepository.findByAccountAndLimitType(account, limitType)).thenReturn(Optional.of(existing));
+        when(accountLimitRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = accountLimitService.setLimitAsCustomer(99L, "IT123", "INSTANT_TRANSFER_SINGLE", request);
+
+        assertEquals(0, new BigDecimal("5000").compareTo(result.getMaxAmount()));
+    }
+
+    @Test
+    void setLimitAsCustomer_blocksBankOnlyAfterSetup() {
+        var user = new com.javaisland.bank_backend.user.model.User();
+        user.setId(99L);
+        user.setLimitsSetupComplete(true);
+        var account = new Account(); account.setId(1L); account.setAccountNumber("IT123");
+        account.setUser(user);
+        account.setIsLimitsConfigured(true);
+
+        var limitType = new LimitType(1, "INSTANT_TRANSFER_SINGLE", "desc", LimitType.ChangePolicy.BANK_ONLY);
+        var existing = new AccountLimit(); existing.setMaxAmount(new BigDecimal("1000"));
+        var request = new SetLimitRequestDto(); request.setMaxAmount(new BigDecimal("2000"));
+
+        when(accountRepository.findByAccountNumber("IT123")).thenReturn(Optional.of(account));
+        when(limitTypeRepository.findByLimitName("INSTANT_TRANSFER_SINGLE")).thenReturn(Optional.of(limitType));
+        when(accountLimitRepository.findByAccountAndLimitType(account, limitType)).thenReturn(Optional.of(existing));
+
+        var ex = assertThrows(ApiBankException.class, () ->
+                accountLimitService.setLimitAsCustomer(99L, "IT123", "INSTANT_TRANSFER_SINGLE", request));
+        assertEquals("BANK_ONLY_LIMIT", ex.getErrorCode());
+    }
+
+    @Test
+    void setLimitAsCustomer_allowsLowerOnlyIncreaseDuringInitialSetup() {
+        var user = new com.javaisland.bank_backend.user.model.User();
+        user.setId(99L);
+        user.setLimitsSetupComplete(true);
+        var account = new Account(); account.setId(1L); account.setAccountNumber("IT123");
+        account.setUser(user);
+        account.setIsLimitsConfigured(false);
+
+        var limitType = new LimitType(1, "DAILY_TRANSFER", "desc", LimitType.ChangePolicy.USER_LOWER_ONLY);
+        var existing = new AccountLimit(); existing.setMaxAmount(new BigDecimal("1000"));
+        var request = new SetLimitRequestDto(); request.setMaxAmount(new BigDecimal("15000"));
+
+        when(accountRepository.findByAccountNumber("IT123")).thenReturn(Optional.of(account));
+        when(limitTypeRepository.findByLimitName("DAILY_TRANSFER")).thenReturn(Optional.of(limitType));
+        when(accountLimitRepository.findByAccountAndLimitType(account, limitType)).thenReturn(Optional.of(existing));
+        when(accountLimitRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var result = accountLimitService.setLimitAsCustomer(99L, "IT123", "DAILY_TRANSFER", request);
+
+        assertEquals(0, new BigDecimal("15000").compareTo(result.getMaxAmount()));
+    }
+
+    @Test
+    void setLimitAsCustomer_blocksLowerOnlyIncreaseAfterSetup() {
+        var user = new com.javaisland.bank_backend.user.model.User();
+        user.setId(99L);
+        user.setLimitsSetupComplete(true);
+        var account = new Account(); account.setId(1L); account.setAccountNumber("IT123");
+        account.setUser(user);
+        account.setIsLimitsConfigured(true);
+
+        var limitType = new LimitType(1, "DAILY_TRANSFER", "desc", LimitType.ChangePolicy.USER_LOWER_ONLY);
+        var existing = new AccountLimit(); existing.setMaxAmount(new BigDecimal("1000"));
+        var request = new SetLimitRequestDto(); request.setMaxAmount(new BigDecimal("2000"));
+
+        when(accountRepository.findByAccountNumber("IT123")).thenReturn(Optional.of(account));
+        when(limitTypeRepository.findByLimitName("DAILY_TRANSFER")).thenReturn(Optional.of(limitType));
+        when(accountLimitRepository.findByAccountAndLimitType(account, limitType)).thenReturn(Optional.of(existing));
+
+        var ex = assertThrows(ApiBankException.class, () ->
+                accountLimitService.setLimitAsCustomer(99L, "IT123", "DAILY_TRANSFER", request));
+        assertEquals("LOWER_ONLY_LIMIT", ex.getErrorCode());
+    }
+
+    @Test
     void getLimits_returnsList() {
         var account = new Account(); account.setId(1L); account.setAccountNumber("IT123");
         var limit = new AccountLimit();

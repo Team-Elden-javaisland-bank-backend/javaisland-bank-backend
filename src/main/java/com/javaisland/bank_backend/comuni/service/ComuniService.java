@@ -35,9 +35,9 @@ public class ComuniService {
                     allComuniLower.add(nome.toLowerCase());
                 }
             }
-            log.info("Caricati {} comuni da comuni.json", allComuni.size());
+            log.info("Loaded {} municipalities from comuni.json", allComuni.size());
         } catch (Exception e) {
-            log.error("Errore caricamento comuni.json", e);
+            log.error("Error loading comuni.json", e);
             allComuni = List.of();
             allComuniLower = List.of();
         }

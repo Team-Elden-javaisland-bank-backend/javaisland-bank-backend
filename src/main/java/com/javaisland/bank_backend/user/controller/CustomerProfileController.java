@@ -90,13 +90,13 @@ public class CustomerProfileController {
     }
 
     private String getStatusName(Integer statusId) {
-        if (statusId == null) return "SCONOSCIUTO";
+        if (statusId == null) return "UNKNOWN";
         return switch (statusId) {
-            case AccountStatus.INACTIVE -> "INATTIVO";
-            case AccountStatus.ACTIVE -> "ATTIVO";
-            case AccountStatus.FROZEN -> "CONGELATO";
-            case AccountStatus.CLOSED -> "CHIUSO";
-            default -> "SCONOSCIUTO";
+            case AccountStatus.INACTIVE -> "INACTIVE";
+            case AccountStatus.ACTIVE -> "ACTIVE";
+            case AccountStatus.FROZEN -> "FROZEN";
+            case AccountStatus.CLOSED -> "CLOSED";
+            default -> "UNKNOWN";
         };
     }
 }

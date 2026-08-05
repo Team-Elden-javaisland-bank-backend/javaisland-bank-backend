@@ -1,10 +1,11 @@
 package com.javaisland.bank_backend.user.service;
 
 import com.javaisland.bank_backend.auth.service.KeycloakAdminService;
-import com.javaisland.bank_backend.auth.service.RegistrationService;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.notification.service.NotificationService;
+import com.javaisland.bank_backend.security.EncryptionService;
 import com.javaisland.bank_backend.user.dto.PasswordChangeRequestDto;
+import com.javaisland.bank_backend.user.dto.PasswordChangeRequestInputDto;
 import com.javaisland.bank_backend.user.model.PasswordChangeRequest;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.repository.PasswordChangeRequestRepository;
@@ -27,23 +28,42 @@ public class PasswordChangeService {
     private final UserRepository userRepository;
     private final KeycloakAdminService keycloakAdminService;
     private final NotificationService notificationService;
+    private final UserPinService userPinService;
+    private final EncryptionService encryptionService;
 
-    public void requestPasswordChange(Long userId) {
+    public void requestPasswordChange(Long userId, PasswordChangeRequestInputDto dto) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         passwordChangeRequestRepository.findFirstByUser_IdAndStatusOrderByCreatedAtDesc(userId, "PENDING")
                 .ifPresent(existing -> {
-                    throw new ApiBankException("Richiesta già in sospeso.", "PENDING_REQUEST_EXISTS");
+                    throw new ApiBankException("PENDING_REQUEST_EXISTS", "PENDING_REQUEST_EXISTS");
                 });
+
+        if (!userPinService.verifyPin(userId, dto.getPin())) {
+            throw new ApiBankException("INVALID_PIN", "INVALID_PIN");
+        }
+
+        try {
+            keycloakAdminService.tokenLogin(user.getUsername(), dto.getCurrentPassword());
+        } catch (ApiBankException e) {
+            throw new ApiBankException("CURRENT_PASSWORD_INCORRECT", "CURRENT_PASSWORD_INCORRECT");
+        }
+
+        if (dto.getCurrentPassword().equals(dto.getNewPassword())) {
+            throw new ApiBankException("NEW_PASSWORD_SAME_AS_CURRENT", "NEW_PASSWORD_SAME_AS_CURRENT");
+        }
+
+        String encryptedPassword = encryptionService.encrypt(dto.getNewPassword());
 
         PasswordChangeRequest changeRequest = PasswordChangeRequest.builder()
                 .user(user)
                 .status("PENDING")
+                .newPasswordEncrypted(encryptedPassword)
                 .build();
 
         passwordChangeRequestRepository.save(changeRequest);
-        notificationService.send(userId, "PASSWORD_CHANGE", "Richiesta di cambio password inviata. In attesa di approvazione.", "NOTIF_PWD_CHANGE_REQUESTED", null);
+        notificationService.send(userId, "PASSWORD_CHANGE", "Password change request submitted. Awaiting approval.", "NOTIF_PWD_CHANGE_REQUESTED", null);
         log.info("Password change request created for user id={}", userId);
     }
 
@@ -67,15 +87,21 @@ public class PasswordChangeService {
     }
 
     @Transactional
-    public void approveRequest(Long requestId, String newPassword) {
+    public void approveRequest(Long requestId) {
         PasswordChangeRequest request = passwordChangeRequestRepository.findById(requestId)
-                .orElseThrow(() -> new ApiBankException("Richiesta non trovata.", "REQUEST_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("REQUEST_NOT_FOUND", "REQUEST_NOT_FOUND"));
 
         if (!"PENDING".equals(request.getStatus())) {
-            throw new ApiBankException("La richiesta non è in stato PENDING.", "INVALID_REQUEST_STATE");
+            throw new ApiBankException("INVALID_REQUEST_STATE", "INVALID_REQUEST_STATE");
+        }
+
+        if (request.getNewPasswordEncrypted() == null || request.getNewPasswordEncrypted().isBlank()) {
+            throw new ApiBankException("INVALID_REQUEST_STATE", "INVALID_REQUEST_STATE");
         }
 
         User user = request.getUser();
+
+        String newPassword = encryptionService.decrypt(request.getNewPasswordEncrypted());
 
         user.setPasswordChangedAt(OffsetDateTime.now(ZoneId.of("Europe/Rome")));
         userRepository.save(user);
@@ -85,9 +111,10 @@ public class PasswordChangeService {
 
         request.setStatus("APPROVED");
         request.setProcessedAt(OffsetDateTime.now(ZoneId.of("Europe/Rome")));
+        request.setNewPasswordEncrypted(null);
         passwordChangeRequestRepository.save(request);
 
-        notificationService.send(user.getId(), "PASSWORD_CHANGE", "La tua richiesta di cambio password è stata approvata.", "NOTIF_PWD_CHANGE_APPROVED", null);
+        notificationService.send(user.getId(), "PASSWORD_CHANGE", "Your password change request has been approved.", "NOTIF_PWD_CHANGE_APPROVED", null);
 
         log.info("Password change request id={} approved for user id={}", requestId, user.getId());
     }
@@ -95,17 +122,17 @@ public class PasswordChangeService {
     @Transactional
     public void rejectRequest(Long requestId) {
         PasswordChangeRequest request = passwordChangeRequestRepository.findById(requestId)
-                .orElseThrow(() -> new ApiBankException("Richiesta non trovata.", "REQUEST_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("REQUEST_NOT_FOUND", "REQUEST_NOT_FOUND"));
 
         if (!"PENDING".equals(request.getStatus())) {
-            throw new ApiBankException("La richiesta non è in stato PENDING.", "INVALID_REQUEST_STATE");
+            throw new ApiBankException("INVALID_REQUEST_STATE", "INVALID_REQUEST_STATE");
         }
 
         request.setStatus("REJECTED");
         request.setProcessedAt(OffsetDateTime.now(ZoneId.of("Europe/Rome")));
         passwordChangeRequestRepository.save(request);
 
-        notificationService.send(request.getUser().getId(), "PASSWORD_CHANGE", "La tua richiesta di cambio password è stata rifiutata.", "NOTIF_PWD_CHANGE_REJECTED", null);
+        notificationService.send(request.getUser().getId(), "PASSWORD_CHANGE", "Your password change request has been rejected.", "NOTIF_PWD_CHANGE_REJECTED", null);
 
         log.info("Password change request id={} rejected for user id={}", requestId, request.getUser().getId());
     }

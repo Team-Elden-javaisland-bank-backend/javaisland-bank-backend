@@ -1,6 +1,6 @@
 package com.javaisland.bank_backend.auth.service;
 
-import com.javaisland.bank_backend.account.service.AccountService;
+import com.javaisland.bank_backend.account.service.AccountManagementService;
 import com.javaisland.bank_backend.auth.dto.RegisterRequestDto;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.user.repository.RoleTypeRepository;
@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class RegistrationService {
 
     private final UserRepository userRepository;
-    private final AccountService accountService;
+    private final AccountManagementService accountManagementService;
     private final RoleTypeRepository roleTypeRepository;
     private final UserStatusRepository userStatusRepository;
     private final KeycloakAdminService keycloakAdminService;
@@ -29,10 +29,10 @@ public class RegistrationService {
     public User createPendingUser(RegisterRequestDto request) {
         String email = request.getEmail().toLowerCase();
         if (userRepository.findByEmail(email).isPresent()) {
-            throw new ApiBankException("Email già registrata.", "EMAIL_ALREADY_REGISTERED");
+            throw new ApiBankException("EMAIL_ALREADY_REGISTERED", "EMAIL_ALREADY_REGISTERED");
         }
         if (userRepository.findByUsername(email).isPresent()) {
-            throw new ApiBankException("Username già registrato.", "USERNAME_ALREADY_REGISTERED");
+            throw new ApiBankException("USERNAME_ALREADY_REGISTERED", "USERNAME_ALREADY_REGISTERED");
         }
         var customerRole = roleTypeRepository.findByRoleName("C")
                 .orElseThrow(() -> new ApiBankException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND"));
@@ -51,7 +51,7 @@ public class RegistrationService {
         } catch (ApiBankException e) {
             throw e;
         } catch (Exception e) {
-            throw new ApiBankException("Creazione utente Keycloak fallita.", "KEYCLOAK_CREATION_FAILED");
+            throw new ApiBankException("KEYCLOAK_CREATION_FAILED", "KEYCLOAK_CREATION_FAILED");
         }
 
         User user = new User();
@@ -66,25 +66,11 @@ public class RegistrationService {
         user.setProfession(request.getProfession());
         user.setGender(request.getGender());
         user.setFiscalCode(request.getFiscalCode());
-        user.setPhone(request.getPhone());
+        user.setPhone(request.getPhone().replaceAll("[\\s\\-]", ""));
         user.setResidence(request.getResidence());
         user.setBirthPlace(request.getBirthPlace());
         user.setBirthProvince(request.getBirthProvince());
         return userRepository.save(user);
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void annulUser(Long userId) {
-        var annulledStatus = userStatusRepository.findByUserStatus("ANNULLED")
-                .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
-        userRepository.findById(userId).ifPresent(u -> {
-            if (u.getKeycloakId() != null) {
-                keycloakAdminService.deleteUser(u.getKeycloakId());
-            }
-            u.setStatus(annulledStatus);
-            userRepository.save(u);
-            log.warn("User id={} ANNULLED because the associated account could not be created", userId);
-        });
     }
 
     @Transactional
@@ -92,12 +78,10 @@ public class RegistrationService {
         User user = createPendingUser(request);
 
         try {
-            accountService.createInitialAccountForUser(user);
+            accountManagementService.createInitialAccountForUser(user);
         } catch (Exception e) {
             log.error("Account creation failed during registration for user id={}: {}", user.getId(), e.getMessage(), e);
-            throw new ApiBankException(
-                    "Registrazione fallita: impossibile creare il conto. Riprova.",
-                    "ACCOUNT_CREATION_FAILED");
+            throw new ApiBankException("ACCOUNT_CREATION_FAILED", "ACCOUNT_CREATION_FAILED");
         }
 
         return UserResponseDto.builder()
@@ -120,12 +104,12 @@ public class RegistrationService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void cancelRegistration(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         var pendingStatus = userStatusRepository.findByUserStatus("PENDING")
                 .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
         if (!user.getStatus().getId().equals(pendingStatus.getId())) {
-            throw new ApiBankException("La registrazione non è in stato PENDING.", "INVALID_STATE");
+            throw new ApiBankException("INVALID_STATE", "INVALID_STATE");
         }
 
         if (user.getKeycloakId() != null) {

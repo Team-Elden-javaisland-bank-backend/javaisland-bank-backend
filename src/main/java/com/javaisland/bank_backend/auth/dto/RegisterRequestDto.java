@@ -19,53 +19,57 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class RegisterRequestDto {
 
-    @NotBlank(message = "Il nome è obbligatorio")
-    @Pattern(regexp = "^[a-zA-ZÀ-ÿ' ]+$", message = "Il nome può contenere solo lettere")
+    @NotBlank(message = "First name is required")
+    @Pattern(regexp = "^[a-zA-ZÀ-ÿ' ]+$", message = "First name can only contain letters")
     private String firstName;
 
-    @NotBlank(message = "Il cognome è obbligatorio")
-    @Pattern(regexp = "^[a-zA-ZÀ-ÿ' ]+$", message = "Il cognome può contenere solo lettere")
+    @NotBlank(message = "Last name is required")
+    @Pattern(regexp = "^[a-zA-ZÀ-ÿ' ]+$", message = "Last name can only contain letters")
     private String lastName;
 
-    @NotNull(message = "La data di nascita è obbligatoria")
+    @NotNull(message = "Birth date is required")
     @Adult
     private LocalDate birthDate;
 
-    @NotBlank(message = "L'email è obbligatoria")
-    @Email(message = "Inserisci un indirizzo email valido")
+    @NotBlank(message = "Email is required")
+    @Email(message = "Please enter a valid email address")
     private String email;
 
-    @NotBlank(message = "La password è obbligatoria")
-    @Size(min = 8, message = "La password deve avere almeno 8 caratteri")
+    @NotBlank(message = "Password is required")
+    @Size(min = 8, message = "Password must be at least 8 characters")
     @Pattern(
         regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z0-9]).+$",
-        message = "La password deve contenere almeno una lettera maiuscola, una minuscola, un numero e un carattere speciale"
+        message = "Password must contain at least one uppercase letter, one lowercase letter, one number and one special character"
     )
     private String password;
 
-    @NotBlank(message = "Il sesso è obbligatorio")
+    @NotBlank(message = "Gender is required")
     private String gender;
 
-    @NotBlank(message = "La professione è obbligatoria")
+    @NotBlank(message = "Profession is required")
     private String profession;
 
-    @NotBlank(message = "Il codice fiscale è obbligatorio")
-    @Size(min = 16, max = 16, message = "Il codice fiscale deve essere di 16 caratteri")
+    @NotBlank(message = "Fiscal code is required")
+    @Size(min = 16, max = 16, message = "Fiscal code must be 16 characters")
     private String fiscalCode;
 
-    @NotBlank(message = "Il telefono è obbligatorio")
-    @Size(max = 20, message = "Il telefono non può superare i 20 caratteri")
+    @NotBlank(message = "Phone is required")
+    @Size(max = 20, message = "Phone must not exceed 20 characters")
+    @Pattern(
+        regexp = "^\\+39(3\\d{8,9}|0\\d{7,10})$",
+        message = "Please enter a valid Italian phone number (e.g., +393331234567)"
+    )
     private String phone;
 
-    @NotBlank(message = "La residenza è obbligatoria")
-    @Size(max = 200, message = "La residenza non può superare i 200 caratteri")
+    @NotBlank(message = "Residence is required")
+    @Size(max = 200, message = "Residence must not exceed 200 characters")
     private String residence;
 
-    @NotBlank(message = "Il luogo di nascita è obbligatorio")
-    @Size(max = 100, message = "Il luogo di nascita non può superare i 100 caratteri")
+    @NotBlank(message = "Birth place is required")
+    @Size(max = 100, message = "Birth place must not exceed 100 characters")
     private String birthPlace;
 
-    @NotBlank(message = "La provincia di nascita è obbligatoria")
-    @Size(min = 2, max = 2, message = "La provincia deve essere di 2 caratteri")
+    @NotBlank(message = "Birth province is required")
+    @Size(min = 2, max = 2, message = "Birth province must be 2 characters")
     private String birthProvince;
 }

@@ -2,7 +2,7 @@
 
 REST API for digital banking services.
 
-**Spring Boot 3.4** · **Spring Security 6** · **Keycloak JWT** · **PostgreSQL 15** · **Springdoc OpenAPI 2.8**
+**Spring Boot 3.4** · **Spring Security 6** · **Keycloak JWT (httpOnly cookie)** · **PostgreSQL** · **Springdoc OpenAPI 2.8**
 
 ---
 
@@ -25,8 +25,10 @@ REST API for digital banking services.
 ## 1. Architecture
 
 - **Monolith** Spring Boot with REST endpoints
-- **Authentication**: JWT Bearer via Keycloak (OAuth2 Resource Server)
-- **Database**: PostgreSQL 15 with normalized schema (lookup tables referenced via FK, JPA DDL auto-update)
+- **Authentication**: JWT via Keycloak (OAuth2 Resource Server), delivered in an httpOnly `bank_token` cookie (SameSite=Lax, 12h) with Bearer-header fallback
+- **Rate Limiting**: per-IP token bucket on `/api/v1/auth/**` endpoints (10 tokens @ 1/s) → HTTP 429 `RATE_LIMIT_EXCEEDED`
+- **Encryption**: AES-GCM (`EncryptionService`) for sensitive payloads (card numbers/expiry, password-change ciphertext)
+- **Database**: PostgreSQL (Docker `15-alpine` or native install, e.g. 18.4) with normalized schema (lookup tables via FK, JPA DDL auto-update)
 - **API Docs**: Springdoc OpenAPI 2.8 (Swagger UI integrated)
 - **Organization**: Screaming Architecture — packages per domain (`account`, `user`, `card`, `transaction`, etc.)
 - **Containers**: Docker Compose for PostgreSQL and Keycloak
@@ -42,6 +44,9 @@ REST API for digital banking services.
 | DataInitializer | Automatic domain table seeding on first startup. Idempotent (checks row count before inserting). Migrates legacy role names (CUSTOMER/EMPLOYEE → C/D). |
 | JPA DDL auto-update | Hibernate `ddl-auto: update` manages schema evolution — no Flyway/Liquibase. |
 | JWT via Keycloak | OAuth2 standard, automatic JWK rotation, SSO-ready, roles mapped via realm roles. |
+| httpOnly Cookie | Token delivered in `bank_token` cookie (httpOnly, SameSite=Lax, 12h) — protected from XSS; Bearer header still accepted via `CookieBearerTokenResolver`. |
+| Rate Limiting | `RateLimitingFilter` token-bucket per client IP on auth endpoints (10 tokens, refill 1/s) to slow down brute force. |
+| AES-GCM Encryption | `EncryptionService` encrypts card PAN/expiry at rest and the new password inside password-change requests (never plaintext). |
 | GlobalExceptionHandler | Centralized error handling for business errors (`ApiBankException`), validation failures, JPA constraint violations, and generic fallback. Supports server-side i18n via `MessageSource`. |
 | DTOs with Validation | Every endpoint uses dedicated DTOs with `jakarta.validation` constraints. No entity exposed directly. |
 | Lombok | Boilerplate reduction (getter, setter, builder, constructors). |
@@ -185,7 +190,8 @@ bank-backend/
     │       └── ComuniService.java
     │
     ├── common/
-    │   └── PageResponseDto.java         # Generic pagination wrapper
+    │   ├── PageResponseDto.java         # Generic pagination wrapper
+    │   └── SecurityUtil.java            # Resolves userId/user from Jwt
     │
     ├── config/
     │   ├── DataInitializer.java         # Domain table seeding
@@ -220,9 +226,11 @@ bank-backend/
     │
     ├── security/                        # JWT security
     │   ├── AppRoleConverter.java
+    │   ├── CookieBearerTokenResolver.java
+    │   ├── EncryptionService.java
     │   ├── JwtPasswordChangeFilter.java
-    │   ├── SecurityConfig.java
-    │   └── SecurityUtil.java
+    │   ├── RateLimitingFilter.java
+    │   └── SecurityConfig.java
     │
     ├── transaction/                     # Transactions
     │   ├── controller/
@@ -292,6 +300,12 @@ bank-backend/
 
 Schema managed via **JPA/Hibernate DDL auto-update** (`ddl-auto: update`). No Flyway/Liquibase.
 Lookup tables auto-populated by `DataInitializer` on first startup.
+
+> **Ambiente**: lo sviluppo corrente usa PostgreSQL nativo (es. 18.4) su `localhost:5432`
+> (db `javaisland_backend`, user `bank_admin`, password `bank_password`). Il
+> `docker-compose.yml` espone un container `postgres:15-alpine` sulla porta host **5433**;
+> per usarlo, puntare il datasource a `localhost:5433`. La tabella legacy
+> `saved_beneficiaries` è stata rimossa (nessun codice la riferisce più).
 
 ### Entity Relationship Diagram (DBML)
 
@@ -456,10 +470,10 @@ Table user_pins {
 Table password_change_requests {
   id bigint [primary key, increment]
   user_id bigint [not null]
-  new_plain_password varchar(100) [not null]
   status varchar(20) [not null]
   created_at timestamp [not null]
   processed_at timestamp
+  new_password_encrypted varchar(500) [note: AES-GCM ciphertext, never plaintext]
 }
 ```
 
@@ -500,7 +514,7 @@ Table password_change_requests {
 | `notifications` | id, user_id, type, message, message_key (i18n key), message_params (JSON array), is_read, created_at |
 | `audit_logs` | id, entity_type, entity_id, action, performed_by, performed_by_user_id, details, performed_at |
 | `user_pins` | id, user_id → `users` (unique, effectively 1:1), pin_hash, created_at |
-| `password_change_requests` | id, user_id, status (PENDING/APPROVED/REJECTED), created_at, processed_at |
+| `password_change_requests` | id, user_id, status (PENDING/APPROVED/REJECTED), created_at, processed_at, new_password_encrypted (AES-GCM, mai in chiaro, azzerata all'approvazione) |
 
 ### Status Constants (Java)
 
@@ -535,17 +549,20 @@ Starts:
 - **PostgreSQL** on `localhost:5433` (db: `javaisland_backend`, user: `bank_admin`, password: `bank_password`)
 - **Keycloak** on `localhost:8080` (admin / admin)
 
+> Nota: l'URL del datasource in `application.yml` è fisso su `localhost:5432`. Per usare il
+> PostgreSQL del compose (porta host 5433), modificare `spring.datasource.url` di conseguenza.
+
 ### 6.2. Import Keycloak realm
 
-1. Go to `http://localhost:8080` (admin / admin)
-2. **Create Realm** → name: `javaisland-realm`
-3. **Clients** → **Create client**:
-   - Client ID: `bank-backend`
-   - Client authentication: `OFF`
-   - Standard flow: `OFF`
-   - Direct access grants: `ON`
-4. **Realm roles** → Create: `C`, `D`, `A`
-5. Create users and assign roles
+1. Il compose avvia Keycloak con `--import-realm` e monta
+   `keycloak-realm-export.json` → il realm `javaisland-realm` viene **importato automaticamente**
+   al primo avvio (client `bank-backend`, ruoli `C`/`D`/`A`).
+2. In alternativa, creazione manuale su `http://localhost:8080` (admin / admin):
+   - **Create Realm** → name: `javaisland-realm`
+   - **Clients** → **Create client**: Client ID `bank-backend`, Client authentication `OFF`,
+     Standard flow `OFF`, Direct access grants `ON`
+   - **Realm roles** → Create: `C`, `D`, `A`
+   - Create users and assign roles
 
 ### 6.3. Start application
 
@@ -560,14 +577,26 @@ On first startup: all tables are created and lookup tables populated automatical
 
 ## 7. Authentication
 
-JWT Bearer via Keycloak OAuth2 Direct Access Grant.
+JWT via Keycloak OAuth2 Direct Access Grant (ROPC), delivered in an httpOnly cookie.
 
 ### Flow
 
 ```
-Client → POST /api/v1/auth/keycloak-login → Keycloak → access_token
-Client → Bearer token → App → Keycloak JWK → validation → roles
+Client → POST /api/v1/auth/keycloak-login → Keycloak (ROPC) → access_token
+Server → Set-Cookie: bank_token=<jwt> (httpOnly, SameSite=Lax, path=/, 12h)
+Client → subsequent requests → Cookie: bank_token → App → Keycloak JWK → validation → roles
+Client → POST /api/v1/auth/logout → clears bank_token cookie
+Client → GET /api/v1/auth/me → restores session profile from JWT
 ```
+
+Behrothead: the resource server accepts the token from the `bank_token` cookie OR from an
+`Authorization: Bearer` header (see `CookieBearerTokenResolver`), so both cookie-based web
+clients and Bearer-based API usage work.
+
+### Rate limiting
+
+All `/api/v1/auth/**` endpoints are rate-limited per client IP (token bucket: 10 tokens,
+refill 1 token/s). Exceeding the limit returns `429` with `code: RATE_LIMIT_EXCEEDED`.
 
 ### Login
 
@@ -598,9 +627,9 @@ Content-Type: application/json
 
 | Role | Description | Endpoints |
 |---|---|---|
-| `C` | Customer | Accounts, Transactions, Cards (read), Beneficiaries, Saved Beneficiaries, Profile, Notifications, PIN, Limits |
+| `C` | Customer | Accounts, Transactions, Cards (read), Beneficiaries, Profile, Notifications, PIN, Limits |
 | `D` | Employee | User management (registrations, password requests, limit requests), Account management (activate, freeze, close), Card management (block, unblock, sensitive) |
-| `A` | Admin | Dashboard, Employee CRUD, Account overview, Customer overview, Audit logs, Global limits, Transactions |
+| `A` | Admin | Dashboard, Employee CRUD, Account overview, Customer overview, Audit logs, Transactions |
 
 ### Additional Security Mechanisms
 
@@ -608,6 +637,9 @@ Content-Type: application/json
 - **User status check**: SUSPENDED/ANNULLED users are force-logged out
 - **Last active account check**: Prevents closure of the only remaining active account
 - **Optimistic locking**: `@Version` on `Account` prevents concurrent balance modification
+- **Rate limiting**: token-bucket per IP on auth endpoints → 429
+- **Cookie hardening**: httpOnly + SameSite=Lax + Secure (configurable) auth cookie
+- **Encryption at rest**: AES-GCM for card PAN/expiry and password-change ciphertext
 
 ### Configuration
 
@@ -635,13 +667,16 @@ Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REA
 | Method | Path | Description |
 |---|---|---|
 | POST | `/register` | Register new user (status PENDING) |
-| POST | `/keycloak-login` | Keycloak login, returns JWT + profile |
+| POST | `/keycloak-login` | Keycloak login, returns JWT (in `bank_token` cookie) + profile |
+| GET | `/me` | Current authenticated profile (session restore) |
+| POST | `/logout` | Clear auth cookie |
 
 ### Customer — Accounts — `/api/v1/customer/accounts` `[C]`
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/` | List all my accounts |
+| GET | `/dashboard-summary` | Aggregated summary for dashboard (balances, counts) |
 | POST | `/open` | Open additional account (with initial transfer from existing account) |
 | POST | `/closure-request` | Request account closure (blocked if last active account) |
 | GET | `/last-active-check` | Check if current user has only one active account |
@@ -651,6 +686,7 @@ Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REA
 | GET | `/{accountNumber}/limits` | View account limits |
 | PUT | `/{accountNumber}/limits/{limitType}` | Update account limit (respects change policy) |
 | PUT | `/limits-setup-complete` | Mark account limits setup as complete |
+| PUT | `/{accountNumber}/limits-config-complete` | Mark limits configuration complete per account |
 
 ### Customer — Transactions — `/api/v1/customer/transactions` `[C]`
 
@@ -661,6 +697,7 @@ Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REA
 | POST | `/transfer` | Transfer (standard, instant, scheduled, or to beneficiary) |
 | GET | `/recent/{accountNumber}` | Last 10 transactions |
 | GET | `/all?start=&end=&page=&size=` | Paginated history with date filters |
+| GET | `/scheduled` | List my scheduled (future-dated) transfers |
 | DELETE | `/{transactionId}/cancel` | Cancel pending transfer |
 
 ### Customer — Cards — `/api/v1/customer/cards` `[C]`
@@ -676,9 +713,9 @@ Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REA
 | Method | Path | Description |
 |---|---|---|
 | GET | `/` | List my beneficiaries |
-| POST | `/` | Save new beneficiary (nickname + IBAN) |
+| POST | `/` | Save new beneficiary (nickname + IBAN). IBAN must exist, be active, and not be own — else 400 |
 | DELETE | `/{id}` | Remove beneficiary |
-| GET | `/check?accountNumber=` | Check if beneficiary already exists for user |
+| GET | `/check?accountNumber=` | Check if account is already a beneficiary for user |
 | PUT | `/{id}/rename` | Rename beneficiary |
 
 ### Customer — Profile — `/api/v1/customer/profile` `[C]`
@@ -703,7 +740,7 @@ Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REA
 | PUT | `/{id}/read` | Mark notification as read |
 | PUT | `/read-all` | Mark all notifications as read |
 
-### Customer — PIN — `/api/v1/customer/pin` `[C]`
+### User — PIN — `/api/v1/user/pin` `[C]`
 
 | Method | Path | Description |
 |---|---|---|
@@ -776,6 +813,7 @@ Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REA
 | PUT | `/cards/{cardId}/block` | Block card (ACTIVE → BLOCKED) |
 | PUT | `/cards/{cardId}/unblock` | Unblock card (BLOCKED → ACTIVE) |
 | GET | `/accounts/{accountNumber}/cards` | Cards linked to account |
+| PATCH | `/admin/cards/{cardId}/status?status=` | Update card status by name (mapped at `/api/v1/admin/cards`) |
 
 ### Admin — Dashboard — `/api/v1/admin/dashboard` `[A]`
 
@@ -796,8 +834,9 @@ Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REA
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/` | List all customers |
+| GET | `/` | List all customers (paginated) |
 | GET | `/{userId}` | Customer detail |
+| POST | `/sync-keycloak` | Sync Keycloak users into local DB (link or create, role C) |
 
 ### Admin — Employees — `/api/v1/admin/employees` `[A]`
 
@@ -813,29 +852,21 @@ Environment variables: `KEYCLOAK_ISSUER_URI`, `KEYCLOAK_AUTH_URL`, `KEYCLOAK_REA
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/` | List all transactions (paginated, filterable) |
-
-### Admin — Limits — `/api/v1/admin/limits` `[A]`
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/` | List all limit types with global defaults |
-| PUT | `/{limitType}` | Update global limit configuration |
+| GET | `/` | List recent transactions (default last 30 days, `?recentDays=&typeId=`, cap 500) |
 
 ### Admin — Audit Logs — `/api/v1/admin/audit-logs` `[A]`
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/` | List audit logs (paginated, filterable by action) |
+| GET | `/` | List audit logs (paginated, filterable by `action`, `recentDays`, date range) |
 
 ### Comuni — `/api/v1/comuni`
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/` | List Italian municipalities (paginated, searchable by name) |
-| GET | `/{nome}` | Search municipality by name |
+| GET | `/?search=` | Search Italian municipalities (ISTAT dataset, max 10 results: prefix first, then substring) |
 
-### Export — `/api/users`
+### Admin — User Export — `/api/v1/admin/users`
 
 | Method | Path | Description |
 |---|---|---|
@@ -880,6 +911,9 @@ Messages are translated server-side based on `Accept-Language` header (Italian d
 | `PENDING_TRANSFER` | 400 | Account has a pending source transfer |
 | `USER_PIN_NOT_SET` | 400 | PIN not yet configured |
 | `USER_PIN_INVALID` | 400 | PIN verification failed |
+| `DUPLICATE_BENEFICIARY` | 400 | IBAN already saved as beneficiary |
+| `SELF_BENEFICIARY_FORBIDDEN` | 400 | Cannot add own account as beneficiary |
+| `RATE_LIMIT_EXCEEDED` | 429 | Too many auth requests from same IP |
 
 ### Validation Errors
 
@@ -942,7 +976,7 @@ Messages are translated server-side based on `Accept-Language` header (Italian d
 - **Change policies**: `USER_FULL` (customer can set any value), `USER_LOWER_ONLY` (customer can only decrease), `BANK_ONLY` (only bank/employee can change)
 - Customer: view limits, update where policy allows, submit limit change request for bank-only types
 - Employee: view and update any limit per account
-- Admin: global limit configuration
+- Admin: view and update limits per account (`/api/v1/admin/accounts/{accountNumber}/limits`)
 - `limits_setup_complete` flag on user tracks initial limit setup
 
 ### 10.6. Employee Management
@@ -962,15 +996,16 @@ Messages are translated server-side based on `Accept-Language` header (Italian d
 - Employee CRUD management with Keycloak sync (create, suspend with force logout, activate)
 - Account overview (all accounts, detail, limits)
 - Customer overview (list, detail)
-- Transaction viewer (all transactions, paginated, filterable)
-- Global limit configuration
+- Transaction viewer (all transactions, recent window)
 - Audit log viewer with action filtering
 
-### 10.8. Beneficiaries & Saved Beneficiaries
+### 10.8. Beneficiaries
 
-- **Beneficiaries**: contact list for transfers, verified by IBAN existence in the bank. Unique per user + destination IBAN. Rename support.
-- **Saved Beneficiaries**: external IBANs saved for quick transfers (cross-bank). CRUD operations.
-- Both used in transfer flow as `beneficiaryId` parameter.
+- **Beneficiaries**: contact list for transfers. On save the IBAN is validated by the backend
+  (must exist, be `ACTIVE`, and not belong to the requesting user) → otherwise 400 (`ACCOUNT_NOT_FOUND`,
+  `SELF_BENEFICIARY_FORBIDDEN`, `INVALID_ACCOUNT_STATE`). Unique per user + destination IBAN. Rename support.
+- Used in the transfer flow as `beneficiaryId` parameter.
+- Note: the legacy `saved_beneficiaries` (external IBANs) feature/table has been removed.
 
 ### 10.9. Profile Picture
 
@@ -1011,6 +1046,12 @@ Messages are translated server-side based on `Accept-Language` header (Italian d
 - Notification messages stored as translation keys with parameters
 - Locale resolved from `Accept-Language` header
 - Default: Italian (`messages.properties`), English (`messages_en.properties`)
+
+### 10.15. Rate Limiting
+
+- `RateLimitingFilter` applies a per-IP token bucket (10 tokens, refill 1/s) to all `/api/v1/auth/**`
+  endpoints (login, register, me, logout) to slow down brute-force attempts.
+- Excess requests return `HTTP 429` `{ "message": "Too many requests", "code": "RATE_LIMIT_EXCEEDED" }`.
 
 ---
 
@@ -1062,7 +1103,7 @@ curl -X POST http://localhost:8081/api/v1/customer/transactions/transfer \
   -H "Content-Type: application/json" \
   -d '{"sourceAccountNumber": "IT...", "destinationAccountNumber": "IT...", "amount": 250, "description": "Transfer"}'
 
-# Using saved beneficiary
+# Using a saved beneficiary (by beneficiaryId, IBAN resolved server-side)
 curl -X POST http://localhost:8081/api/v1/customer/transactions/transfer \
   -H "Authorization: Bearer <customer-token>" \
   -H "Content-Type: application/json" \
@@ -1106,17 +1147,17 @@ curl -X PUT http://localhost:8081/api/v1/customer/accounts/IT.../limits/ATM_WITH
 
 ```bash
 # Setup PIN
-curl -X POST http://localhost:8081/api/v1/customer/pin/setup \
+curl -X POST http://localhost:8081/api/v1/user/pin/setup \
   -H "Authorization: Bearer <customer-token>" \
   -H "Content-Type: application/json" \
   -d '{"pin": "123456"}'
 
 # Check PIN status
-curl -X GET http://localhost:8081/api/v1/customer/pin/status \
+curl -X GET http://localhost:8081/api/v1/user/pin/status \
   -H "Authorization: Bearer <customer-token>"
 
 # Verify PIN
-curl -X POST http://localhost:8081/api/v1/customer/pin/verify \
+curl -X POST http://localhost:8081/api/v1/user/pin/verify \
   -H "Authorization: Bearer <customer-token>" \
   -H "Content-Type: application/json" \
   -d '{"pin": "123456"}'
@@ -1125,20 +1166,18 @@ curl -X POST http://localhost:8081/api/v1/customer/pin/verify \
 ### Beneficiary management
 
 ```bash
-# Save internal beneficiary (bank account must exist)
+# Save beneficiary (IBAN must exist in the bank, be active, not own)
 curl -X POST http://localhost:8081/api/v1/customer/beneficiaries \
   -H "Authorization: Bearer <customer-token>" \
   -H "Content-Type: application/json" \
   -d '{"nickname": "Mom", "destinationAccountNumber": "IT..."}'
 
-# Save external beneficiary (any IBAN)
-curl -X POST http://localhost:8081/api/v1/customer/beneficiaries \
-  -H "Authorization: Bearer <customer-token>" \
-  -H "Content-Type: application/json" \
-  -d '{"nickname": "Dad ext", "beneficiaryName": "Dad", "destinationAccountNumber": "IT..."}'
-
 # List beneficiaries
 curl -X GET http://localhost:8081/api/v1/customer/beneficiaries \
+  -H "Authorization: Bearer <customer-token>"
+
+# Check if account is already a beneficiary
+curl -X GET "http://localhost:8081/api/v1/customer/beneficiaries/check?accountNumber=IT..." \
   -H "Authorization: Bearer <customer-token>"
 
 # Remove beneficiary

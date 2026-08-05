@@ -2,11 +2,16 @@ package com.javaisland.bank_backend.admin.controller;
 
 import com.javaisland.bank_backend.account.model.Account;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
+import com.javaisland.bank_backend.admin.dto.AdminAccountListItemDto;
+import com.javaisland.bank_backend.common.PageResponseDto;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.Data;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -24,45 +29,38 @@ public class AdminAccountController {
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
 
-    @Data
-    public static class AdminAccountListItemDto {
-        private String accountNumber;
-        private BigDecimal balance;
-        private Integer statusId;
-        private Long userId;
-        private String userFullName;
-        private String userEmail;
-        private String profilePictureUrl;
-        private OffsetDateTime createdAt;
-        private OffsetDateTime closedAt;
-    }
-
     @GetMapping
-    public ResponseEntity<List<AdminAccountListItemDto>> listAccounts(
-            @RequestParam(required = false) Integer statusId) {
-        List<Account> accounts;
+    public ResponseEntity<PageResponseDto<AdminAccountListItemDto>> listAccounts(
+            @RequestParam(required = false) Integer statusId,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
         if (statusId != null) {
-            accounts = accountRepository.findByStatusId(statusId);
-        } else {
-            accounts = accountRepository.findAll();
+            List<Account> accounts = accountRepository.findByStatusId(statusId);
+            List<AdminAccountListItemDto> fullList = accounts.stream().map(a -> toListItem(a)).toList();
+            int start = (int) pageable.getOffset();
+            int end = Math.min(start + pageable.getPageSize(), fullList.size());
+            List<AdminAccountListItemDto> paginatedList = fullList.subList(start, end);
+            return ResponseEntity.ok(PageResponseDto.from(new PageImpl<>(paginatedList, pageable, fullList.size())));
         }
 
-        List<AdminAccountListItemDto> result = accounts.stream().map(a -> {
-            User user = a.getUser();
-            var dto = new AdminAccountListItemDto();
-            dto.setAccountNumber(a.getAccountNumber());
-            dto.setBalance(a.getBalance());
-            dto.setStatusId(a.getStatusId());
-            dto.setUserId(user.getId());
-            dto.setUserFullName(user.getFirstName() + " " + user.getLastName());
-            dto.setUserEmail(user.getEmail());
-            dto.setProfilePictureUrl(user.getProfilePictureUrl());
-            dto.setCreatedAt(a.getCreatedAt());
-            dto.setClosedAt(a.getClosedAt());
-            return dto;
-        }).toList();
+        Page<Account> accountPage = accountRepository.findAll(pageable);
+        List<AdminAccountListItemDto> dtos = accountPage.stream().map(a -> toListItem(a)).toList();
+        PageImpl<AdminAccountListItemDto> resultPage = new PageImpl<>(dtos, pageable, accountPage.getTotalElements());
+        return ResponseEntity.ok(PageResponseDto.from(resultPage));
+    }
 
-        return ResponseEntity.ok(result);
+    private AdminAccountListItemDto toListItem(Account a) {
+        User user = a.getUser();
+        var dto = new AdminAccountListItemDto();
+        dto.setAccountNumber(a.getAccountNumber());
+        dto.setBalance(a.getBalance());
+        dto.setStatusId(a.getStatusId());
+        dto.setUserId(user.getId());
+        dto.setUserFullName(user.getFirstName() + " " + user.getLastName());
+        dto.setUserEmail(user.getEmail());
+        dto.setProfilePictureUrl(user.getProfilePictureUrl());
+        dto.setCreatedAt(a.getCreatedAt());
+        dto.setClosedAt(a.getClosedAt());
+        return dto;
     }
 
     @GetMapping("/{accountNumber}")

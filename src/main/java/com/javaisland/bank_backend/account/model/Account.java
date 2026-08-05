@@ -50,6 +50,9 @@ public class Account {
     @Column(name = "initial_amount", precision = 15, scale = 2)
     private BigDecimal initialAmount;
 
+    @Column(name = "is_limits_configured", nullable = false, columnDefinition = "boolean default true")
+    private Boolean isLimitsConfigured = Boolean.TRUE;
+
     @Version
     private Long version = 0L;
 }

@@ -27,6 +27,10 @@ public class NotificationService {
     private final UserRepository userRepository;
 
     public void send(Long userId, String type, String message, String messageKey, String messageParams) {
+        if (userId == null) {
+            log.warn("Skipping notification: user id is null (type={})", type);
+            return;
+        }
         User user = userRepository.findById(userId).orElse(null);
         Notification n = Notification.builder()
                 .user(user)
@@ -44,7 +48,7 @@ public class NotificationService {
                 .map(n -> {
                     String translatedMessage = n.getMessage();
                     if (n.getMessageKey() != null && !n.getMessageKey().isBlank()) {
-                        Object[] args = parseParams(n.getMessageParams());
+                        Object[] args = translateLimitParams(parseParams(n.getMessageParams()), locale);
                         translatedMessage = messageSource.getMessage(n.getMessageKey(), args, n.getMessage(), locale);
                     }
                     return NotificationDto.builder()
@@ -96,5 +100,22 @@ public class NotificationService {
             log.warn("Failed to parse notification params: {}", messageParams);
             return new Object[0];
         }
+    }
+
+    private Object[] translateLimitParams(Object[] args, Locale locale) {
+        if (args.length == 0) {
+            return args;
+        }
+        for (int i = 0; i < args.length; i++) {
+            if (args[i] == null) {
+                continue;
+            }
+            String translated = messageSource.getMessage(
+                    "LIMIT_TYPE." + args[i] + ".label", null, null, locale);
+            if (translated != null) {
+                args[i] = translated;
+            }
+        }
+        return args;
     }
 }

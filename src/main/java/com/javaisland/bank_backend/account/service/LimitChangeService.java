@@ -2,6 +2,7 @@ package com.javaisland.bank_backend.account.service;
 
 import com.javaisland.bank_backend.account.dto.AccountLimitResponseDto;
 import com.javaisland.bank_backend.account.dto.LimitChangeRequestCreateDto;
+import com.javaisland.bank_backend.account.model.Account;
 import com.javaisland.bank_backend.account.model.AccountLimit;
 import com.javaisland.bank_backend.account.model.LimitChangeRequest;
 import com.javaisland.bank_backend.account.model.LimitType;
@@ -40,14 +41,14 @@ public class LimitChangeService {
     @Transactional
     public void requestLimitChange(Long userId, LimitChangeRequestCreateDto request) {
         var account = accountRepository.findByAccountNumber(request.getAccountNumber())
-                .orElseThrow(() -> new ApiBankException("Conto non trovato.", "ACCOUNT_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("ACCOUNT_NOT_FOUND", "ACCOUNT_NOT_FOUND"));
 
         if (!account.getUser().getId().equals(userId)) {
-            throw new ApiBankException("Conto non appartiene all'utente.", "ACCOUNT_NOT_OWNED");
+            throw new ApiBankException("ACCOUNT_NOT_OWNED", "ACCOUNT_NOT_OWNED");
         }
 
         var limitType = limitTypeRepository.findByLimitName(request.getLimitType())
-                .orElseThrow(() -> new ApiBankException("Tipo limite non valido.", "INVALID_LIMIT_TYPE"));
+                .orElseThrow(() -> new ApiBankException("INVALID_LIMIT_TYPE", "INVALID_LIMIT_TYPE"));
 
         Optional<AccountLimit> existingLimit = accountLimitRepository
                 .findByAccountAndLimitType(account, limitType);
@@ -55,26 +56,26 @@ public class LimitChangeService {
         BigDecimal currentAmount = existingLimit.map(AccountLimit::getMaxAmount).orElse(BigDecimal.ZERO);
 
         if (limitType.getChangePolicy() == LimitType.ChangePolicy.USER_FULL) {
-            throw new ApiBankException("Questo limite puo essere modificato direttamente.", "LIMIT_FULL_ACCESS");
-        }
-
-        if (limitType.getChangePolicy() == LimitType.ChangePolicy.USER_LOWER_ONLY) {
-            if (request.getRequestedAmount().compareTo(currentAmount) <= 0) {
-                throw new ApiBankException(
-                        "Per questo limite puoi solo richiedere un aumento. Per diminuire, usa la modifica diretta.",
-                        "LOWER_ONLY_INCREASE_REQUIRED");
-            }
+            throw new ApiBankException("LIMIT_FULL_ACCESS", "LIMIT_FULL_ACCESS");
         }
 
         if (request.getRequestedAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ApiBankException("L'importo richiesto deve essere maggiore di zero.", "INVALID_AMOUNT");
+            throw new ApiBankException("INVALID_AMOUNT", "INVALID_AMOUNT");
+        }
+
+        if (limitType.getChangePolicy() == LimitType.ChangePolicy.USER_LOWER_ONLY
+                && request.getRequestedAmount().compareTo(currentAmount) < 0) {
+            applyDecreaseDirectly(account, limitType, existingLimit, request.getRequestedAmount());
+            notificationService.send(userId, "LIMIT_CHANGE",
+                    "Your " + request.getLimitType() + " limit has been lowered directly.", "NOTIF_LIMIT_CHANGE_DECREASED", "[\"" + request.getLimitType() + "\"]");
+            log.info("Limit {} decreased directly for user id={}", request.getLimitType(), userId);
+            return;
         }
 
         if (limitChangeRequestRepository.existsByAccountNumberAndLimitTypeNameAndStatus(
                 request.getAccountNumber(), request.getLimitType(), "PENDING")) {
             throw new ApiBankException(
-                    "Hai già una richiesta in corso per questo limite. Attendi che venga elaborata.",
-                    "PENDING_REQUEST_EXISTS");
+                    "PENDING_REQUEST_EXISTS", "PENDING_REQUEST_EXISTS");
         }
 
         limitChangeRequestRepository.save(LimitChangeRequest.builder()
@@ -87,9 +88,23 @@ public class LimitChangeService {
                 .build());
 
         notificationService.send(userId, "LIMIT_CHANGE",
-                "Richiesta di modifica limite " + request.getLimitType() + " inviata. In attesa di approvazione.", "NOTIF_LIMIT_CHANGE_REQUESTED", "[\"" + request.getLimitType() + "\"]");
+                "Limit change request for " + request.getLimitType() + " submitted. Awaiting approval.", "NOTIF_LIMIT_CHANGE_REQUESTED", "[\"" + request.getLimitType() + "\"]");
 
         log.info("Limit change request created for user id={}, limit={}", userId, request.getLimitType());
+    }
+
+    private void applyDecreaseDirectly(Account account, LimitType limitType,
+                                       Optional<AccountLimit> existingLimit, BigDecimal newAmount) {
+        if (existingLimit.isPresent()) {
+            existingLimit.get().setMaxAmount(newAmount);
+            accountLimitRepository.save(existingLimit.get());
+        } else {
+            accountLimitRepository.save(AccountLimit.builder()
+                    .account(account)
+                    .limitType(limitType)
+                    .maxAmount(newAmount)
+                    .build());
+        }
     }
 
     public List<LimitChangeRequest> getPendingRequests() {
@@ -103,20 +118,26 @@ public class LimitChangeService {
     @Transactional
     public void approveRequest(Long requestId) {
         LimitChangeRequest request = limitChangeRequestRepository.findById(requestId)
-                .orElseThrow(() -> new ApiBankException("Richiesta non trovata.", "REQUEST_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("REQUEST_NOT_FOUND", "REQUEST_NOT_FOUND"));
 
         if (!"PENDING".equals(request.getStatus())) {
-            throw new ApiBankException("Richiesta non e in stato PENDING.", "REQUEST_NOT_PENDING");
+            throw new ApiBankException("REQUEST_NOT_PENDING", "REQUEST_NOT_PENDING");
         }
 
         var account = accountRepository.findByAccountNumber(request.getAccountNumber())
-                .orElseThrow(() -> new ApiBankException("Conto non trovato.", "ACCOUNT_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("ACCOUNT_NOT_FOUND", "ACCOUNT_NOT_FOUND"));
 
         var limitType = limitTypeRepository.findByLimitName(request.getLimitTypeName())
-                .orElseThrow(() -> new ApiBankException("Tipo limite non valido.", "INVALID_LIMIT_TYPE"));
+                .orElseThrow(() -> new ApiBankException("INVALID_LIMIT_TYPE", "INVALID_LIMIT_TYPE"));
 
         Optional<AccountLimit> existingLimit = accountLimitRepository
                 .findByAccountAndLimitType(account, limitType);
+
+        BigDecimal currentAmount = existingLimit.map(AccountLimit::getMaxAmount).orElse(BigDecimal.ZERO);
+
+        if (request.getRequestedAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ApiBankException("INVALID_AMOUNT", "INVALID_AMOUNT");
+        }
 
         if (existingLimit.isPresent()) {
             existingLimit.get().setMaxAmount(request.getRequestedAmount());
@@ -134,7 +155,7 @@ public class LimitChangeService {
         limitChangeRequestRepository.save(request);
 
         notificationService.send(request.getUserId(), "LIMIT_CHANGE",
-                "La tua richiesta di modifica limite " + request.getLimitTypeName() + " e stata approvata.", "NOTIF_LIMIT_CHANGE_APPROVED", "[\"" + request.getLimitTypeName() + "\"]");
+                "Your limit change request for " + request.getLimitTypeName() + " has been approved.", "NOTIF_LIMIT_CHANGE_APPROVED", "[\"" + request.getLimitTypeName() + "\"]");
 
         log.info("Limit change request id={} approved", requestId);
     }
@@ -142,10 +163,10 @@ public class LimitChangeService {
     @Transactional
     public void rejectRequest(Long requestId) {
         LimitChangeRequest request = limitChangeRequestRepository.findById(requestId)
-                .orElseThrow(() -> new ApiBankException("Richiesta non trovata.", "REQUEST_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("REQUEST_NOT_FOUND", "REQUEST_NOT_FOUND"));
 
         if (!"PENDING".equals(request.getStatus())) {
-            throw new ApiBankException("Richiesta non e in stato PENDING.", "REQUEST_NOT_PENDING");
+            throw new ApiBankException("REQUEST_NOT_PENDING", "REQUEST_NOT_PENDING");
         }
 
         request.setStatus("REJECTED");
@@ -153,7 +174,7 @@ public class LimitChangeService {
         limitChangeRequestRepository.save(request);
 
         notificationService.send(request.getUserId(), "LIMIT_CHANGE",
-                "La tua richiesta di modifica limite " + request.getLimitTypeName() + " e stata rifiutata.", "NOTIF_LIMIT_CHANGE_REJECTED", "[\"" + request.getLimitTypeName() + "\"]");
+                "Your limit change request for " + request.getLimitTypeName() + " has been rejected.", "NOTIF_LIMIT_CHANGE_REJECTED", "[\"" + request.getLimitTypeName() + "\"]");
 
         log.info("Limit change request id={} rejected", requestId);
     }

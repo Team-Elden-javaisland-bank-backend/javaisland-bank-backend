@@ -32,9 +32,13 @@ public class SecurityConfig {
     private String allowedOrigins;
 
     private final JwtPasswordChangeFilter jwtPasswordChangeFilter;
+    private final RateLimitingFilter rateLimitingFilter;
+    private final CookieBearerTokenResolver cookieBearerTokenResolver;
 
-    public SecurityConfig(JwtPasswordChangeFilter jwtPasswordChangeFilter) {
+    public SecurityConfig(JwtPasswordChangeFilter jwtPasswordChangeFilter, RateLimitingFilter rateLimitingFilter, CookieBearerTokenResolver cookieBearerTokenResolver) {
         this.jwtPasswordChangeFilter = jwtPasswordChangeFilter;
+        this.rateLimitingFilter = rateLimitingFilter;
+        this.cookieBearerTokenResolver = cookieBearerTokenResolver;
     }
 
     @Bean
@@ -46,13 +50,16 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/v1/auth/register",
                                 "/api/v1/auth/keycloak-login",
+                                "/api/v1/auth/logout",
                                 "/api/v1/comuni",
                                 "/uploads/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(cookieBearerTokenResolver)
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                 )
+                .addFilterBefore(rateLimitingFilter, BearerTokenAuthenticationFilter.class)
                 .addFilterAfter(jwtPasswordChangeFilter, BearerTokenAuthenticationFilter.class);
 
         return http.build();

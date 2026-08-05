@@ -2,7 +2,6 @@ package com.javaisland.bank_backend.card.controller;
 
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.card.dto.CardResponseDto;
-import com.javaisland.bank_backend.card.dto.CardSensitiveDto;
 import com.javaisland.bank_backend.card.service.CardService;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import lombok.RequiredArgsConstructor;
@@ -31,22 +30,16 @@ public class EmployeeCardController {
         return ResponseEntity.ok(cardService.getCardDetail(cardId));
     }
 
-    @GetMapping("/cards/{cardId}/sensitive")
-    public ResponseEntity<CardSensitiveDto> getCardSensitive(@PathVariable Long cardId) {
-        var card = cardService.getCardDetail(cardId);
-        return ResponseEntity.ok(cardService.getCardSensitiveByCardId(cardId));
-    }
-
     @PutMapping("/cards/{cardId}/block")
-    public ResponseEntity<String> blockCard(@PathVariable Long cardId) {
+    public ResponseEntity<Void> blockCard(@PathVariable Long cardId) {
         cardService.updateCardStatus(cardId, "BLOCKED");
-        return ResponseEntity.ok("Carta bloccata con successo.");
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping("/cards/{cardId}/unblock")
-    public ResponseEntity<String> unblockCard(@PathVariable Long cardId) {
+    public ResponseEntity<Void> unblockCard(@PathVariable Long cardId) {
         cardService.unblockCard(cardId);
-        return ResponseEntity.ok("Carta sbloccata con successo.");
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/accounts/{accountNumber}/cards")

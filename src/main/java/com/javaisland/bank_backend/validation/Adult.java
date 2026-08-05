@@ -8,7 +8,7 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Constraint(validatedBy = AdultValidator.class)
 public @interface Adult {
-    String message() default "Devi essere maggiorenne per registrarti.";
+    String message() default "You must be of legal age to register.";
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }

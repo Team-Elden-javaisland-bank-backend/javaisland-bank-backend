@@ -21,11 +21,11 @@ public class LimitChangeController {
     private final SecurityUtil securityUtil;
 
     @PostMapping
-    public ResponseEntity<String> requestLimitChange(
+    public ResponseEntity<Void> requestLimitChange(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody LimitChangeRequestCreateDto request) {
         Long userId = securityUtil.getUserId(jwt);
         limitChangeService.requestLimitChange(userId, request);
-        return ResponseEntity.ok("Richiesta di modifica limite inviata. In attesa di approvazione.");
+        return ResponseEntity.ok().build();
     }
 }

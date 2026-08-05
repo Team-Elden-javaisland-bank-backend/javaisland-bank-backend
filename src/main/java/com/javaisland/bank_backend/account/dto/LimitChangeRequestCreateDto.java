@@ -16,13 +16,13 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class LimitChangeRequestCreateDto {
 
-    @NotBlank(message = "IBAN conto obbligatorio")
+    @NotBlank(message = "Account IBAN is required")
     private String accountNumber;
 
-    @NotBlank(message = "Tipo limite obbligatorio")
+    @NotBlank(message = "Limit type is required")
     private String limitType;
 
-    @NotNull(message = "Importo richiesto obbligatorio")
-    @DecimalMin(value = "0.01", message = "Importo deve essere maggiore di 0")
+    @NotNull(message = "Requested amount is required")
+    @DecimalMin(value = "0.01", message = "Amount must be greater than 0")
     private BigDecimal requestedAmount;
 }

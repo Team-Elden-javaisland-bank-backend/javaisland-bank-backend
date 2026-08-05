@@ -30,7 +30,7 @@ public class AdminEmployeeService {
     @Transactional(readOnly = true)
     public List<EmployeeListItemDto> getAllEmployees() {
         var employeeRole = roleTypeRepository.findByRoleName("D")
-                .orElseThrow(() -> new ApiBankException("Ruolo D non configurato.", "ROLE_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND"));
         return userRepository.findByRoleTypeOrderByFirstNameAscLastNameAsc(employeeRole)
                 .stream().map(u -> EmployeeListItemDto.builder()
                         .userId(u.getId())
@@ -48,7 +48,7 @@ public class AdminEmployeeService {
     @Transactional(readOnly = true)
     public EmployeeDetailDto getEmployeeDetail(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
         return EmployeeDetailDto.builder()
                 .userId(user.getId())
                 .firstName(user.getFirstName())
@@ -65,11 +65,11 @@ public class AdminEmployeeService {
     public EmployeeListItemDto createEmployee(CreateEmployeeRequestDto request) {
         String email = request.getEmail().toLowerCase();
         if (userRepository.findByEmail(email).isPresent()) {
-            throw new ApiBankException("Email già registrata.", "EMAIL_EXISTS");
+            throw new ApiBankException("EMAIL_EXISTS", "EMAIL_EXISTS");
         }
 
         var employeeRole = roleTypeRepository.findByRoleName("D")
-                .orElseThrow(() -> new ApiBankException("Ruolo D non configurato.", "ROLE_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND"));
         var activeStatus = userStatusRepository.findByUserStatus("ACTIVE")
                 .orElseThrow(() -> new ApiBankException("STATUS_NOT_FOUND", "STATUS_NOT_FOUND"));
 
@@ -83,14 +83,14 @@ public class AdminEmployeeService {
                     request.getLastName(),
                     true);
         } catch (Exception e) {
-            throw new ApiBankException("Creazione utente Keycloak fallita.", "KEYCLOAK_CREATION_FAILED");
+            throw new ApiBankException("KEYCLOAK_CREATION_FAILED", "KEYCLOAK_CREATION_FAILED");
         }
 
         try {
             keycloakAdminService.assignRole(keycloakId, "D");
         } catch (Exception e) {
             keycloakAdminService.deleteUser(keycloakId);
-            throw new ApiBankException("Assegnazione ruolo dipendente fallita.", "ROLE_ASSIGNMENT_FAILED");
+            throw new ApiBankException("ROLE_ASSIGNMENT_FAILED", "ROLE_ASSIGNMENT_FAILED");
         }
 
         User user = new User();
@@ -128,12 +128,12 @@ public class AdminEmployeeService {
     @Transactional
     public void suspendEmployee(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         var employeeRole = roleTypeRepository.findByRoleName("D")
-                .orElseThrow(() -> new ApiBankException("Ruolo D non configurato.", "ROLE_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND"));
         if (!user.getRoleType().getId().equals(employeeRole.getId())) {
-            throw new ApiBankException("L'utente non è un dipendente.", "NOT_EMPLOYEE");
+            throw new ApiBankException("NOT_EMPLOYEE", "NOT_EMPLOYEE");
         }
 
         var suspendedStatus = userStatusRepository.findByUserStatus("SUSPENDED")
@@ -152,12 +152,12 @@ public class AdminEmployeeService {
     @Transactional
     public void activateEmployee(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         var employeeRole = roleTypeRepository.findByRoleName("D")
-                .orElseThrow(() -> new ApiBankException("Ruolo D non configurato.", "ROLE_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND"));
         if (!user.getRoleType().getId().equals(employeeRole.getId())) {
-            throw new ApiBankException("L'utente non è un dipendente.", "NOT_EMPLOYEE");
+            throw new ApiBankException("NOT_EMPLOYEE", "NOT_EMPLOYEE");
         }
 
         var activeStatus = userStatusRepository.findByUserStatus("ACTIVE")

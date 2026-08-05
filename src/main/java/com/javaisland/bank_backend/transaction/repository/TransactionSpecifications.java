@@ -21,12 +21,4 @@ public final class TransactionSpecifications {
     public static Specification<Transaction> createdBetween(OffsetDateTime start, OffsetDateTime end) {
         return (root, query, cb) -> cb.between(root.get("createdAt"), start, end);
     }
-
-    public static Specification<Transaction> hasType(Integer typeId) {
-        return (root, query, cb) -> typeId == null ? null : cb.equal(root.get("typeId"), typeId);
-    }
-
-    public static Specification<Transaction> hasStatus(Integer statusId) {
-        return (root, query, cb) -> statusId == null ? null : cb.equal(root.get("statusId"), statusId);
-    }
 }

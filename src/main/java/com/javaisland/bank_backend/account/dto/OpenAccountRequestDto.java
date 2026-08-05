@@ -8,9 +8,9 @@ import java.math.BigDecimal;
 @Data
 public class OpenAccountRequestDto {
 
-    @NotBlank(message = "Il conto sorgente è obbligatorio")
+    @NotBlank(message = "Source account is required")
     private String sourceAccountNumber;
 
-    @DecimalMin(value = "0.01", message = "L'importo iniziale deve essere maggiore di 0")
+    @DecimalMin(value = "0.01", message = "Initial amount must be greater than 0")
     private BigDecimal initialAmount;
 }

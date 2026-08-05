@@ -1,13 +1,13 @@
 package com.javaisland.bank_backend.card.controller;
 
-import com.javaisland.bank_backend.card.model.Card;
 import com.javaisland.bank_backend.card.service.CardService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/cards")
+@RequestMapping("/api/v1/admin/cards")
 public class CardController {
 
     private final CardService cardService;
@@ -18,11 +18,11 @@ public class CardController {
 
     @PatchMapping("/{cardId}/status")
     @PreAuthorize("hasRole('D')")
-    public ResponseEntity<Card> updateStatus(
+    public ResponseEntity<Void> updateStatus(
             @PathVariable Long cardId,
             @RequestParam String status) {
 
-        Card updatedCard = cardService.updateCardStatus(cardId, status);
-        return ResponseEntity.ok(updatedCard);
+        cardService.updateCardStatus(cardId, status);
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 }

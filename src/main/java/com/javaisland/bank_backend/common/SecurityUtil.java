@@ -18,18 +18,18 @@ public class SecurityUtil {
 
     public Long getUserId(Jwt jwt) {
         return userRepository.findByKeycloakId(jwt.getSubject())
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"))
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"))
                 .getId();
     }
 
     public User getUser(Jwt jwt) {
         return userRepository.findByKeycloakId(jwt.getSubject())
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
     }
 
     public void assertOwnership(Account account, Long userId) {
         if (!account.getUser().getId().equals(userId)) {
-            throw new ApiBankException("Il conto " + account.getAccountNumber() + " non appartiene all'utente corrente.", "FORBIDDEN");
+            throw new ApiBankException("FORBIDDEN", "FORBIDDEN");
         }
     }
 }

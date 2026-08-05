@@ -7,13 +7,13 @@ import lombok.Data;
 @Data
 public class BeneficiaryRequestDto {
 
-    @NotBlank(message = "Il nickname è obbligatorio")
+    @NotBlank(message = "Nickname is required")
     @Size(max = 100)
     private String nickname;
 
     @Size(max = 150)
     private String beneficiaryName;
 
-    @NotBlank(message = "Il numero del conto di destinazione è obbligatorio")
+    @NotBlank(message = "Destination account number is required")
     private String destinationAccountNumber;
 }

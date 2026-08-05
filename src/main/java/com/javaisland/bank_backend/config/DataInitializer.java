@@ -111,12 +111,12 @@ public class DataInitializer implements CommandLineRunner {
 
     private void seedLimitTypes() {
         if (limitTypeRepository.count() > 0) return;
-        limitTypeRepository.save(new LimitType(null, "DAILY_TRANSFER", "Importo massimo cumulativo di bonifico giornaliero", LimitType.ChangePolicy.USER_LOWER_ONLY));
-        limitTypeRepository.save(new LimitType(null, "SINGLE_TRANSFER", "Importo massimo per singolo bonifico", LimitType.ChangePolicy.USER_LOWER_ONLY));
-        limitTypeRepository.save(new LimitType(null, "INSTANT_TRANSFER_SINGLE", "Importo massimo per singolo bonifico istantaneo", LimitType.ChangePolicy.BANK_ONLY));
-        limitTypeRepository.save(new LimitType(null, "MONTHLY_TRANSFER", "Importo massimo cumulativo di bonifico mensile", LimitType.ChangePolicy.BANK_ONLY));
-        limitTypeRepository.save(new LimitType(null, "ATM_WITHDRAWAL", "Prelievo massimo al bancomat per transazione", LimitType.ChangePolicy.USER_FULL));
-        limitTypeRepository.save(new LimitType(null, "POS_SPENDING", "Spesa massima POS per transazione", LimitType.ChangePolicy.USER_FULL));
+        limitTypeRepository.save(new LimitType(null, "DAILY_TRANSFER", "Maximum cumulative daily transfer amount", LimitType.ChangePolicy.USER_LOWER_ONLY));
+        limitTypeRepository.save(new LimitType(null, "SINGLE_TRANSFER", "Maximum amount per single transfer", LimitType.ChangePolicy.USER_LOWER_ONLY));
+        limitTypeRepository.save(new LimitType(null, "INSTANT_TRANSFER_SINGLE", "Maximum amount per single instant transfer", LimitType.ChangePolicy.BANK_ONLY));
+        limitTypeRepository.save(new LimitType(null, "MONTHLY_TRANSFER", "Maximum cumulative monthly transfer amount", LimitType.ChangePolicy.BANK_ONLY));
+        limitTypeRepository.save(new LimitType(null, "ATM_WITHDRAWAL", "Maximum ATM withdrawal per transaction", LimitType.ChangePolicy.USER_FULL));
+        limitTypeRepository.save(new LimitType(null, "POS_SPENDING", "Maximum POS spending per transaction", LimitType.ChangePolicy.USER_FULL));
     }
 
     private void seedTransactionTypes() {

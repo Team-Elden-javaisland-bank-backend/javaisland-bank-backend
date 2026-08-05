@@ -24,67 +24,67 @@ public class User {
     @Column(name = "keycloak_id", unique = true)
     private String keycloakId;
 
-    @NotBlank(message = "Lo username non può essere vuoto")
-    @Size(min = 4, max = 50, message = "Lo username deve avere tra 4 e 50 caratteri")
+    @NotBlank(message = "Username must not be empty")
+    @Size(min = 4, max = 50, message = "Username must be between 4 and 50 characters")
     @Column(unique = true, nullable = false, length = 50)
     private String username;
 
-    @NotBlank(message = "Il nome è obbligatorio")
-    @Size(max = 100, message = "Il nome non può superare i 100 caratteri")
+    @NotBlank(message = "First name is required")
+    @Size(max = 100, message = "First name must not exceed 100 characters")
     @Column(name = "first_name", nullable = false, length = 100)
     private String firstName;
 
-    @NotBlank(message = "Il cognome è obbligatorio")
-    @Size(max = 100, message = "Il cognome non può superare i 100 caratteri")
+    @NotBlank(message = "Last name is required")
+    @Size(max = 100, message = "Last name must not exceed 100 characters")
     @Column(name = "last_name", nullable = false, length = 100)
     private String lastName;
 
-    @Past(message = "La data di nascita deve essere una data passata")
+    @Past(message = "Birth date must be in the past")
     @Column(name = "birth_date")
     private LocalDate birthDate;
 
-    @NotBlank(message = "L'email è obbligatoria")
-    @Email(message = "Inserisci un indirizzo email formattato correttamente")
-    @Size(max = 150, message = "L'email non può superare i 150 caratteri")
+    @NotBlank(message = "Email is required")
+    @Email(message = "Please enter a properly formatted email address")
+    @Size(max = 150, message = "Email must not exceed 150 characters")
     @Column(unique = true, nullable = false, length = 150)
     private String email;
 
-    @Size(max = 20, message = "Il codice filiale non può superare i 20 caratteri")
+    @Size(max = 20, message = "Branch code must not exceed 20 characters")
     @Column(name = "branch_code", length = 20)
     private String branchCode;
 
-    @NotBlank(message = "La professione è obbligatoria")
-    @Size(max = 100, message = "La professione non può superare i 100 caratteri")
+    @NotBlank(message = "Profession is required")
+    @Size(max = 100, message = "Profession must not exceed 100 characters")
     @Column(name = "profession", length = 100)
     private String profession;
 
-    @NotBlank(message = "Il sesso è obbligatorio")
-    @Size(min = 1, max = 1, message = "Il sesso deve essere M o F")
+    @NotBlank(message = "Gender is required")
+    @Size(min = 1, max = 1, message = "Gender must be M or F")
     @Column(name = "gender", length = 1)
     private String gender;
 
-    @NotBlank(message = "Il codice fiscale è obbligatorio")
-    @Size(min = 16, max = 16, message = "Il codice fiscale deve essere di 16 caratteri")
+    @NotBlank(message = "Fiscal code is required")
+    @Size(min = 16, max = 16, message = "Fiscal code must be 16 characters")
     @Column(name = "fiscal_code", unique = true, length = 16)
     private String fiscalCode;
 
-    @NotBlank(message = "Il telefono è obbligatorio")
-    @Size(max = 20, message = "Il telefono non può superare i 20 caratteri")
+    @NotBlank(message = "Phone is required")
+    @Size(max = 20, message = "Phone must not exceed 20 characters")
     @Column(name = "phone", length = 20)
     private String phone;
 
-    @NotBlank(message = "La residenza è obbligatoria")
-    @Size(max = 200, message = "La residenza non può superare i 200 caratteri")
+    @NotBlank(message = "Residence is required")
+    @Size(max = 200, message = "Residence must not exceed 200 characters")
     @Column(name = "residence", length = 200)
     private String residence;
 
-    @NotBlank(message = "Il luogo di nascita è obbligatorio")
-    @Size(max = 100, message = "Il luogo di nascita non può superare i 100 caratteri")
+    @NotBlank(message = "Birth place is required")
+    @Size(max = 100, message = "Birth place must not exceed 100 characters")
     @Column(name = "birth_place", length = 100)
     private String birthPlace;
 
-    @NotBlank(message = "La provincia di nascita è obbligatoria")
-    @Size(min = 2, max = 2, message = "La provincia deve essere di 2 caratteri")
+    @NotBlank(message = "Birth province is required")
+    @Size(min = 2, max = 2, message = "Birth province must be 2 characters")
     @Column(name = "birth_province", length = 2)
     private String birthProvince;
 

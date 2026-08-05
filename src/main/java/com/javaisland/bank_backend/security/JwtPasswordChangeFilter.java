@@ -29,6 +29,14 @@ public class JwtPasswordChangeFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.endsWith("/api/v1/auth/keycloak-login")
+                || path.endsWith("/api/v1/auth/logout")
+                || path.endsWith("/api/v1/auth/register");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {

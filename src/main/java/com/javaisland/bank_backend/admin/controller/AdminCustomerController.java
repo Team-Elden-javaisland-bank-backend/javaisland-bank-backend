@@ -3,6 +3,8 @@ package com.javaisland.bank_backend.admin.controller;
 import com.javaisland.bank_backend.account.dto.AccountResponseDto;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.account.model.Account;
+import com.javaisland.bank_backend.admin.dto.AdminCustomerDetailDto;
+import com.javaisland.bank_backend.admin.dto.AdminCustomerListItemDto;
 import com.javaisland.bank_backend.auth.service.KeycloakAdminService;
 import com.javaisland.bank_backend.exception.ApiBankException;
 import com.javaisland.bank_backend.user.model.User;
@@ -11,9 +13,12 @@ import com.javaisland.bank_backend.user.model.UserStatus;
 import com.javaisland.bank_backend.user.repository.UserRepository;
 import com.javaisland.bank_backend.user.repository.RoleTypeRepository;
 import com.javaisland.bank_backend.user.repository.UserStatusRepository;
+import com.javaisland.bank_backend.common.PageResponseDto;
 import lombok.RequiredArgsConstructor;
-import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -37,52 +42,18 @@ public class AdminCustomerController {
     private final KeycloakAdminService keycloakAdminService;
     private final UserStatusRepository userStatusRepository;
 
-    @Data
-    public static class AdminCustomerListItemDto {
-        private Long userId;
-        private String firstName;
-        private String lastName;
-        private String email;
-        private String username;
-        private String status;
-        private String profilePictureUrl;
-        private int accountCount;
-        private BigDecimal totalBalance;
-        private OffsetDateTime createdAt;
-    }
-
-    @Data
-    public static class AdminCustomerDetailDto {
-        private Long userId;
-        private String firstName;
-        private String lastName;
-        private String email;
-        private String username;
-        private LocalDate birthDate;
-        private String gender;
-        private String fiscalCode;
-        private String phone;
-        private String residence;
-        private String birthPlace;
-        private String birthProvince;
-        private String profession;
-        private String status;
-        private String profilePictureUrl;
-        private OffsetDateTime createdAt;
-        private List<AccountResponseDto> accounts;
-    }
-
     @GetMapping
-    public ResponseEntity<List<AdminCustomerListItemDto>> listCustomers() {
+    public ResponseEntity<PageResponseDto<AdminCustomerListItemDto>> listCustomers(
+            @PageableDefault(size = 20, sort = "firstName") Pageable pageable) {
         var customerRole = roleTypeRepository.findByRoleName("C").orElse(null);
-        if (customerRole == null) return ResponseEntity.ok(List.of());
+        if (customerRole == null) return ResponseEntity.ok(PageResponseDto.from(new PageImpl<AdminCustomerListItemDto>(List.of())));
 
         List<User> users = userRepository.findByRoleTypeOrderByFirstNameAscLastNameAsc(customerRole);
         List<Long> userIds = users.stream().map(User::getId).toList();
         List<Account> allAccounts = accountRepository.findByUserIdIn(userIds);
         var accountsByUser = allAccounts.stream().collect(java.util.stream.Collectors.groupingBy(a -> a.getUser().getId()));
 
-        List<AdminCustomerListItemDto> result = users.stream().map(user -> {
+        List<AdminCustomerListItemDto> fullList = users.stream().map(user -> {
             List<Account> userAccounts = accountsByUser.getOrDefault(user.getId(), List.of());
             var dto = new AdminCustomerListItemDto();
             dto.setUserId(user.getId());
@@ -100,7 +71,10 @@ public class AdminCustomerController {
             return dto;
         }).toList();
 
-        return ResponseEntity.ok(result);
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), fullList.size());
+        List<AdminCustomerListItemDto> paginatedList = fullList.subList(start, end);
+        return ResponseEntity.ok(PageResponseDto.from(new PageImpl<>(paginatedList, pageable, fullList.size())));
     }
 
     @GetMapping("/{userId}")

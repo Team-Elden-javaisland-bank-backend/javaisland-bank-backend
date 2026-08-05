@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -26,6 +28,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/profile-picture")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("hasRole('C')")
 public class ProfilePictureController {
 
     private final SecurityUtil securityUtil;
@@ -36,6 +39,13 @@ public class ProfilePictureController {
 
     private static final Set<String> ALLOWED_TYPES = Set.of(
             "image/jpeg", "image/png", "image/gif", "image/webp"
+    );
+
+    private static final Map<String, String> TYPE_TO_EXTENSION = Map.of(
+            "image/jpeg", ".jpg",
+            "image/png", ".png",
+            "image/gif", ".gif",
+            "image/webp", ".webp"
     );
 
     private static final long MAX_SIZE = 5 * 1024 * 1024;
@@ -49,7 +59,8 @@ public class ProfilePictureController {
             throw new ApiBankException("File vuoto.", "EMPTY_FILE");
         }
 
-        if (!ALLOWED_TYPES.contains(file.getContentType())) {
+        String contentType = file.getContentType();
+        if (!ALLOWED_TYPES.contains(contentType)) {
             throw new ApiBankException("Tipo non supportato. Usa JPG, PNG, GIF o WebP.", "INVALID_FILE_TYPE");
         }
 
@@ -62,9 +73,12 @@ public class ProfilePictureController {
         Path dirPath = Paths.get(uploadDir).toAbsolutePath();
         Files.createDirectories(dirPath);
 
-        String ext = getExtension(file.getOriginalFilename());
+        String ext = TYPE_TO_EXTENSION.get(contentType);
         String filename = user.getId() + "_" + UUID.randomUUID() + ext;
-        Path filePath = dirPath.resolve(filename);
+        Path filePath = dirPath.resolve(filename).normalize();
+        if (!filePath.startsWith(dirPath)) {
+            throw new ApiBankException("Percorso non valido.", "INVALID_UPLOAD_PATH");
+        }
 
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
@@ -92,12 +106,6 @@ public class ProfilePictureController {
         }
 
         return ResponseEntity.ok().build();
-    }
-
-    private String getExtension(String filename) {
-        if (filename == null) return ".jpg";
-        int dot = filename.lastIndexOf('.');
-        return dot >= 0 ? filename.substring(dot) : ".jpg";
     }
 
     private void deleteOldPicture(String pictureUrl) {

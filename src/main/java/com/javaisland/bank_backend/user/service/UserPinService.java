@@ -21,15 +21,15 @@ public class UserPinService {
     @Transactional
     public void setupPin(Long userId, String pin) {
         if (pin == null || !pin.matches("^\\d{4}$")) {
-            throw new ApiBankException("Il PIN deve essere di 4 cifre.", "INVALID_PIN_FORMAT");
+            throw new ApiBankException("INVALID_PIN_FORMAT", "INVALID_PIN_FORMAT");
         }
 
         if (userPinRepository.existsByUserId(userId)) {
-            throw new ApiBankException("PIN già configurato. Usa l'endpoint di modifica.", "PIN_ALREADY_EXISTS");
+            throw new ApiBankException("PIN_ALREADY_EXISTS", "PIN_ALREADY_EXISTS");
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+                    .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         UserPin userPin = new UserPin();
         userPin.setUser(user);

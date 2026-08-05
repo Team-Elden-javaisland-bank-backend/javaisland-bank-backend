@@ -6,8 +6,9 @@ import com.javaisland.bank_backend.account.model.AccountStatus;
 import com.javaisland.bank_backend.account.model.LimitChangeRequest;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.account.repository.LimitChangeRequestRepository;
-import com.javaisland.bank_backend.account.service.AccountService;
+import com.javaisland.bank_backend.account.service.AccountQueryService;
 import com.javaisland.bank_backend.account.service.LimitChangeService;
+import com.javaisland.bank_backend.common.PageResponseDto;
 import com.javaisland.bank_backend.employee.dto.EmployeeRequestDto;
 import com.javaisland.bank_backend.user.dto.CustomerListItemDto;
 import com.javaisland.bank_backend.user.dto.PasswordChangeRequestDto;
@@ -19,6 +20,8 @@ import com.javaisland.bank_backend.user.repository.UserRepository;
 import com.javaisland.bank_backend.user.service.PasswordChangeService;
 import com.javaisland.bank_backend.user.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -39,7 +42,7 @@ public class EmployeeUserController {
     private final UserService userService;
     private final PasswordChangeService passwordChangeService;
     private final LimitChangeService limitChangeService;
-    private final AccountService accountService;
+    private final AccountQueryService accountQueryService;
     private final PasswordChangeRequestRepository passwordChangeRequestRepository;
     private final LimitChangeRequestRepository limitChangeRequestRepository;
     private final AccountRepository accountRepository;
@@ -51,15 +54,15 @@ public class EmployeeUserController {
     }
 
     @PutMapping("/registrations/{userId}/validate")
-    public ResponseEntity<String> validateRegistration(@PathVariable Long userId) {
+    public ResponseEntity<Void> validateRegistration(@PathVariable Long userId) {
         userService.validateRegistration(userId);
-        return ResponseEntity.ok("Registrazione validata, conto attivato.");
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping("/registrations/{userId}/reject")
-    public ResponseEntity<String> rejectRegistration(@PathVariable Long userId) {
+    public ResponseEntity<Void> rejectRegistration(@PathVariable Long userId) {
         userService.rejectRegistration(userId);
-        return ResponseEntity.ok("Registrazione rifiutata.");
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/registrations/refused")
@@ -68,25 +71,27 @@ public class EmployeeUserController {
     }
 
     @PutMapping("/registrations/{userId}/reopen")
-    public ResponseEntity<String> reopenRegistration(@PathVariable Long userId) {
+    public ResponseEntity<Void> reopenRegistration(@PathVariable Long userId) {
         userService.reopenRegistration(userId);
-        return ResponseEntity.ok("Registrazione riaperta.");
+        return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/{userId}")
-    public ResponseEntity<String> deleteUser(@PathVariable Long userId) {
+    public ResponseEntity<Void> deleteUser(@PathVariable Long userId) {
         userService.deleteUserAndAccount(userId);
-        return ResponseEntity.ok("Utente e conto associato eliminati.");
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/customers")
-    public ResponseEntity<List<CustomerListItemDto>> getAllCustomersSortedByName() {
-        return ResponseEntity.ok(userService.getAllCustomersSortedByName());
+    public ResponseEntity<PageResponseDto<CustomerListItemDto>> getAllCustomersSortedByName(
+            @RequestParam(required = false) String status,
+            @PageableDefault(size = 20, sort = "firstName") Pageable pageable) {
+        return ResponseEntity.ok(userService.getAllCustomersSortedByName(pageable, status));
     }
 
     @GetMapping("/{userId}/detail")
     public ResponseEntity<EmployeeUserDetailDto> getUserDetailByUserId(@PathVariable Long userId) {
-        return ResponseEntity.ok(accountService.getEmployeeUserDetailByUserId(userId));
+        return ResponseEntity.ok(accountQueryService.getEmployeeUserDetailByUserId(userId));
     }
 
     @GetMapping("/password-requests/pending")
@@ -95,21 +100,15 @@ public class EmployeeUserController {
     }
 
     @PutMapping("/password-requests/{requestId}/approve")
-    public ResponseEntity<String> approvePasswordRequest(
-            @PathVariable Long requestId,
-            @RequestBody Map<String, String> body) {
-        String newPassword = body.get("newPassword");
-        if (newPassword == null || newPassword.isBlank()) {
-            return ResponseEntity.badRequest().body("La nuova password è obbligatoria.");
-        }
-        passwordChangeService.approveRequest(requestId, newPassword);
-        return ResponseEntity.ok("Richiesta di cambio password approvata.");
+    public ResponseEntity<Void> approvePasswordRequest(@PathVariable Long requestId) {
+        passwordChangeService.approveRequest(requestId);
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping("/password-requests/{requestId}/reject")
-    public ResponseEntity<String> rejectPasswordRequest(@PathVariable Long requestId) {
+    public ResponseEntity<Void> rejectPasswordRequest(@PathVariable Long requestId) {
         passwordChangeService.rejectRequest(requestId);
-        return ResponseEntity.ok("Richiesta di cambio password rifiutata.");
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/limit-requests/pending")
@@ -118,15 +117,15 @@ public class EmployeeUserController {
     }
 
     @PutMapping("/limit-requests/{requestId}/approve")
-    public ResponseEntity<String> approveLimitRequest(@PathVariable Long requestId) {
+    public ResponseEntity<Void> approveLimitRequest(@PathVariable Long requestId) {
         limitChangeService.approveRequest(requestId);
-        return ResponseEntity.ok("Richiesta di modifica limite approvata.");
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping("/limit-requests/{requestId}/reject")
-    public ResponseEntity<String> rejectLimitRequest(@PathVariable Long requestId) {
+    public ResponseEntity<Void> rejectLimitRequest(@PathVariable Long requestId) {
         limitChangeService.rejectRequest(requestId);
-        return ResponseEntity.ok("Richiesta di modifica limite rifiutata.");
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/all-requests")
@@ -149,7 +148,7 @@ public class EmployeeUserController {
                     .id(req.getId())
                     .type("PASSWORD_CHANGE")
                     .status(req.getStatus())
-                    .description("Cambio password richiesto")
+                    .description("PASSWORD_CHANGE_REQUESTED")
                     .userId(user.getId())
                     .userFirstName(user.getFirstName())
                     .userLastName(user.getLastName())
@@ -186,7 +185,7 @@ public class EmployeeUserController {
                         .id(acc.getId())
                         .type("ACCOUNT_OPENING")
                         .status("PENDING")
-                        .description("Apertura conto — IBAN: " + iban)
+                        .description("ACCOUNT_OPENING — IBAN: " + iban)
                         .userId(user.getId())
                         .userFirstName(user.getFirstName())
                         .userLastName(user.getLastName())
@@ -200,7 +199,7 @@ public class EmployeeUserController {
                         .id(acc.getId())
                         .type("ACCOUNT_CLOSURE")
                         .status("PENDING")
-                        .description("Chiusura conto — IBAN: " + iban)
+                        .description("ACCOUNT_CLOSURE — IBAN: " + iban)
                         .userId(user.getId())
                         .userFirstName(user.getFirstName())
                         .userLastName(user.getLastName())
@@ -213,7 +212,7 @@ public class EmployeeUserController {
                         .id(acc.getId())
                         .type("ACCOUNT_CLOSURE")
                         .status("APPROVED")
-                        .description("Chiusura conto — IBAN: " + iban)
+                        .description("ACCOUNT_CLOSURE — IBAN: " + iban)
                         .userId(user.getId())
                         .userFirstName(user.getFirstName())
                         .userLastName(user.getLastName())

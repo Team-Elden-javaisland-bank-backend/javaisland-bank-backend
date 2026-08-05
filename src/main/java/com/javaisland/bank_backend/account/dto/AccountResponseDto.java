@@ -21,6 +21,8 @@ public class AccountResponseDto {
     private String profilePictureUrl;
     private Integer userStatusId;
     private BigDecimal initialAmount;
+    private Boolean isLimitsConfigured;
     private OffsetDateTime createdAt;
     private OffsetDateTime closedAt;
+    private OffsetDateTime closureRequestedAt;
 }

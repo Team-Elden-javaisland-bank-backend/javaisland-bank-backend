@@ -15,19 +15,19 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CreateEmployeeRequestDto {
 
-    @NotBlank(message = "Il nome è obbligatorio")
-    @Pattern(regexp = "^[a-zA-ZÀ-ÿ' ]+$", message = "Il nome può contenere solo lettere")
+    @NotBlank(message = "First name is required")
+    @Pattern(regexp = "^[a-zA-ZÀ-ÿ' ]+$", message = "First name can only contain letters")
     private String firstName;
 
-    @NotBlank(message = "Il cognome è obbligatorio")
-    @Pattern(regexp = "^[a-zA-ZÀ-ÿ' ]+$", message = "Il cognome può contenere solo lettere")
+    @NotBlank(message = "Last name is required")
+    @Pattern(regexp = "^[a-zA-ZÀ-ÿ' ]+$", message = "Last name can only contain letters")
     private String lastName;
 
-    @NotBlank(message = "L'email è obbligatoria")
-    @Email(message = "Inserisci un indirizzo email valido")
+    @NotBlank(message = "Email is required")
+    @Email(message = "Please enter a valid email address")
     private String email;
 
-    @NotBlank(message = "La password è obbligatoria")
-    @Size(min = 8, message = "La password deve avere almeno 8 caratteri")
+    @NotBlank(message = "Password is required")
+    @Size(min = 8, message = "Password must be at least 8 characters")
     private String password;
 }

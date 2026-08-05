@@ -41,7 +41,7 @@ public class BeneficiaryController {
                                           @PathVariable Long id) {
         Long userId = getUserId(jwt);
         beneficiaryService.delete(userId, id);
-        return ResponseEntity.ok("Beneficiario rimosso.");
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/check")
@@ -58,7 +58,7 @@ public class BeneficiaryController {
         Long userId = getUserId(jwt);
         String nickname = body.get("nickname");
         if (nickname == null || nickname.isBlank()) {
-            throw new com.javaisland.bank_backend.exception.ApiBankException("Nickname obbligatorio.", "INVALID_NICKNAME");
+            throw new com.javaisland.bank_backend.exception.ApiBankException("INVALID_NICKNAME", "INVALID_NICKNAME");
         }
         return ResponseEntity.ok(beneficiaryService.rename(userId, id, nickname));
     }

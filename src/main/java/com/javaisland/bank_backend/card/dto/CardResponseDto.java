@@ -19,4 +19,5 @@ public class CardResponseDto {
     private String status;
     private Long accountId;
     private String accountNumber;
+    private String accountStatus;
 }

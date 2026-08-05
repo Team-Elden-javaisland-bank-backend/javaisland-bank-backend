@@ -17,6 +17,8 @@ import com.javaisland.bank_backend.transaction.repository.TransactionStatusRepos
 import com.javaisland.bank_backend.transaction.repository.TransactionTypeRepository;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.repository.UserRepository;
+import com.javaisland.bank_backend.user.service.UserPinService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,10 +27,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,8 +48,14 @@ class TransactionServiceTest {
     @Mock private AccountLimitService accountLimitService;
     @Mock private NotificationService notificationService;
     @Mock private SecurityUtil securityUtil;
+    @Mock private UserPinService userPinService;
 
     @InjectMocks private TransactionService transactionService;
+
+    @BeforeEach
+    void stubValidPin() {
+        lenient().when(userPinService.verifyPin(anyLong(), any())).thenReturn(true);
+    }
 
     private Account createAccount(Long id, String number, BigDecimal balance, int statusId, Long userId) {
         Account a = new Account();
@@ -177,10 +188,11 @@ class TransactionServiceTest {
         dto.setSourceAccountNumber("IT1");
         dto.setDestinationAccountNumber("IT2");
         dto.setAmount(new BigDecimal("300"));
+        dto.setPin("1234");
         dto.setScheduledDate(LocalDate.now().plusDays(2));
 
-        when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(src));
-        when(accountRepository.findByAccountNumber("IT2")).thenReturn(Optional.of(dst));
+        when(accountRepository.findByAccountNumberForUpdate("IT1")).thenReturn(Optional.of(src));
+        when(accountRepository.findByAccountNumberForUpdate("IT2")).thenReturn(Optional.of(dst));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         var result = transactionService.transfer(10L, dto);
@@ -202,11 +214,12 @@ class TransactionServiceTest {
         dto.setSourceAccountNumber("IT1");
         dto.setBeneficiaryId(99L);
         dto.setAmount(new BigDecimal("300"));
+        dto.setPin("1234");
         dto.setScheduledDate(LocalDate.now().plusDays(2));
 
         when(beneficiaryService.resolveAccountNumber(10L, 99L)).thenReturn("IT2");
-        when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(src));
-        when(accountRepository.findByAccountNumber("IT2")).thenReturn(Optional.of(dst));
+        when(accountRepository.findByAccountNumberForUpdate("IT1")).thenReturn(Optional.of(src));
+        when(accountRepository.findByAccountNumberForUpdate("IT2")).thenReturn(Optional.of(dst));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         var result = transactionService.transfer(10L, dto);
@@ -221,6 +234,7 @@ class TransactionServiceTest {
         dto.setSourceAccountNumber("IT1");
         dto.setDestinationAccountNumber("IT1");
         dto.setAmount(new BigDecimal("100"));
+        dto.setPin("1234");
 
         assertThrows(ApiBankException.class, () -> transactionService.transfer(10L, dto));
     }
@@ -230,6 +244,7 @@ class TransactionServiceTest {
         var dto = new TransferRequestDto();
         dto.setSourceAccountNumber("IT1");
         dto.setAmount(new BigDecimal("100"));
+        dto.setPin("1234");
 
         assertThrows(ApiBankException.class, () -> transactionService.transfer(10L, dto));
     }
@@ -247,7 +262,7 @@ class TransactionServiceTest {
         request.setAccountNumber("IT1");
         request.setAmount(new BigDecimal("200"));
 
-        when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(acc));
+        when(accountRepository.findByAccountNumberForUpdate("IT1")).thenReturn(Optional.of(acc));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         transactionService.deposit(10L, request);
@@ -267,13 +282,55 @@ class TransactionServiceTest {
         var request = new com.javaisland.bank_backend.transaction.dto.TransactionRequestDto();
         request.setAccountNumber("IT1");
         request.setAmount(new BigDecimal("400"));
+        request.setPin("1234");
 
-        when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(acc));
+        when(accountRepository.findByAccountNumberForUpdate("IT1")).thenReturn(Optional.of(acc));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         transactionService.withdraw(10L, request);
 
         assertEquals(0, new BigDecimal("600").compareTo(acc.getBalance()));
+    }
+
+    @Test
+    void withdraw_belowMinimum() {
+        var request = new com.javaisland.bank_backend.transaction.dto.TransactionRequestDto();
+        request.setAccountNumber("IT1");
+        request.setAmount(new BigDecimal("5"));
+        request.setPin("1234");
+
+        assertThrows(ApiBankException.class, () -> transactionService.withdraw(10L, request));
+    }
+
+    @Test
+    void withdraw_notMultipleOf10() {
+        var request = new com.javaisland.bank_backend.transaction.dto.TransactionRequestDto();
+        request.setAccountNumber("IT1");
+        request.setAmount(new BigDecimal("15"));
+        request.setPin("1234");
+
+        assertThrows(ApiBankException.class, () -> transactionService.withdraw(10L, request));
+    }
+
+    @Test
+    void withdraw_multipleOf10_ok() {
+        when(transactionTypeRepository.findByTypeName("WITHDRAWAL"))
+                .thenReturn(Optional.of(new TransactionType(2, "WITHDRAWAL")));
+        when(transactionStatusRepository.findByStatusName("COMPLETED"))
+                .thenReturn(Optional.of(new TransactionStatus(2, "COMPLETED")));
+
+        Account acc = createAccount(1L, "IT1", new BigDecimal("500"), AccountStatus.ACTIVE, 10L);
+
+        var request = new com.javaisland.bank_backend.transaction.dto.TransactionRequestDto();
+        request.setAccountNumber("IT1");
+        request.setAmount(new BigDecimal("50"));
+        request.setPin("1234");
+
+        when(accountRepository.findByAccountNumberForUpdate("IT1")).thenReturn(Optional.of(acc));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assertDoesNotThrow(() -> transactionService.withdraw(10L, request));
+        assertEquals(0, new BigDecimal("450").compareTo(acc.getBalance()));
     }
 
     @Test
@@ -288,9 +345,190 @@ class TransactionServiceTest {
         var request = new com.javaisland.bank_backend.transaction.dto.TransactionRequestDto();
         request.setAccountNumber("IT1");
         request.setAmount(new BigDecimal("500"));
+        request.setPin("1234");
 
-        when(accountRepository.findByAccountNumber("IT1")).thenReturn(Optional.of(acc));
+        when(accountRepository.findByAccountNumberForUpdate("IT1")).thenReturn(Optional.of(acc));
 
         assertThrows(ApiBankException.class, () -> transactionService.withdraw(10L, request));
+    }
+
+    @Test
+    void cancelPendingTransaction_cancelsScheduledTransfer() {
+        when(transactionStatusRepository.findByStatusName("PENDING"))
+                .thenReturn(Optional.of(new TransactionStatus(1, "PENDING")));
+        when(transactionStatusRepository.findByStatusName("CANCELLED"))
+                .thenReturn(Optional.of(new TransactionStatus(5, "CANCELLED")));
+
+        Account src = createAccount(1L, "IT1", new BigDecimal("1000"), AccountStatus.ACTIVE, 10L);
+        Transaction tx = new Transaction();
+        tx.setId(50L);
+        tx.setStatusId(1);
+        tx.setSourceAccount(src);
+        tx.setDescription("Bonifico Programmato");
+
+        when(transactionRepository.findById(50L)).thenReturn(Optional.of(tx));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        transactionService.cancelPendingTransaction(10L, 50L);
+
+        assertEquals(5, tx.getStatusId());
+        assertTrue(tx.getDescription().contains("TRANSACTION_CANCELLED_BY_USER"));
+        verify(transactionRepository).save(tx);
+    }
+
+    @Test
+    void cancelPendingTransaction_alreadyCompletedThrows() {
+        when(transactionStatusRepository.findByStatusName("PENDING"))
+                .thenReturn(Optional.of(new TransactionStatus(1, "PENDING")));
+
+        Account src = createAccount(1L, "IT1", new BigDecimal("1000"), AccountStatus.ACTIVE, 10L);
+        Transaction tx = new Transaction();
+        tx.setId(50L);
+        tx.setStatusId(2);
+        tx.setSourceAccount(src);
+
+        when(transactionRepository.findById(50L)).thenReturn(Optional.of(tx));
+
+        assertThrows(ApiBankException.class, () -> transactionService.cancelPendingTransaction(10L, 50L));
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void cancelPendingTransaction_notOwnedByUserThrows() {
+        when(transactionStatusRepository.findByStatusName("PENDING"))
+                .thenReturn(Optional.of(new TransactionStatus(1, "PENDING")));
+
+        Account src = createAccount(1L, "IT1", new BigDecimal("1000"), AccountStatus.ACTIVE, 10L);
+        Transaction tx = new Transaction();
+        tx.setId(50L);
+        tx.setStatusId(1);
+        tx.setSourceAccount(src);
+
+        when(transactionRepository.findById(50L)).thenReturn(Optional.of(tx));
+        doThrow(new ApiBankException("FORBIDDEN", "FORBIDDEN"))
+                .when(securityUtil).assertOwnership(src, 10L);
+
+        assertThrows(ApiBankException.class, () -> transactionService.cancelPendingTransaction(10L, 50L));
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void cancelPendingTransaction_notFoundThrows() {
+        when(transactionRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(ApiBankException.class, () -> transactionService.cancelPendingTransaction(10L, 99L));
+    }
+
+    @Test
+    void executePendingTransfers_success() {
+        when(transactionStatusRepository.findByStatusName("PENDING"))
+                .thenReturn(Optional.of(new TransactionStatus(1, "PENDING")));
+        when(transactionStatusRepository.findByStatusName("COMPLETED"))
+                .thenReturn(Optional.of(new TransactionStatus(2, "COMPLETED")));
+
+        Account src = createAccount(1L, "IT1", new BigDecimal("1000"), AccountStatus.ACTIVE, 10L);
+        Account dst = createAccount(2L, "IT2", new BigDecimal("500"), AccountStatus.ACTIVE, 20L);
+
+        Transaction tx = new Transaction();
+        tx.setId(50L);
+        tx.setStatusId(1);
+        tx.setAmount(new BigDecimal("300"));
+        tx.setSourceAccount(src);
+        tx.setDestinationAccount(dst);
+        tx.setDescription("Bonifico Programmato");
+
+        when(transactionRepository.findByStatusIdAndScheduledDateLessThanEqual(eq(1), any()))
+                .thenReturn(List.of(tx));
+        when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(src));
+        when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(dst));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        transactionService.executePendingTransfers();
+
+        assertEquals(0, new BigDecimal("700").compareTo(src.getBalance()));
+        assertEquals(0, new BigDecimal("800").compareTo(dst.getBalance()));
+        assertEquals(2, tx.getStatusId());
+        assertEquals(0, new BigDecimal("700").compareTo(tx.getSourceBalanceAfter()));
+        assertEquals(0, new BigDecimal("800").compareTo(tx.getDestBalanceAfter()));
+    }
+
+    @Test
+    void executePendingTransfers_insufficientFunds_fails() {
+        when(transactionStatusRepository.findByStatusName("PENDING"))
+                .thenReturn(Optional.of(new TransactionStatus(1, "PENDING")));
+        when(transactionStatusRepository.findByStatusName("FAILED"))
+                .thenReturn(Optional.of(new TransactionStatus(3, "FAILED")));
+
+        Account src = createAccount(1L, "IT1", new BigDecimal("100"), AccountStatus.ACTIVE, 10L);
+        Account dst = createAccount(2L, "IT2", new BigDecimal("500"), AccountStatus.ACTIVE, 20L);
+
+        Transaction tx = new Transaction();
+        tx.setId(50L);
+        tx.setStatusId(1);
+        tx.setAmount(new BigDecimal("300"));
+        tx.setSourceAccount(src);
+        tx.setDestinationAccount(dst);
+        tx.setDescription("Bonifico Programmato");
+
+        when(transactionRepository.findByStatusIdAndScheduledDateLessThanEqual(eq(1), any()))
+                .thenReturn(List.of(tx));
+        when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(src));
+        when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(dst));
+
+        transactionService.executePendingTransfers();
+
+        assertEquals(3, tx.getStatusId());
+        assertTrue(tx.getDescription().contains("Insufficient funds"));
+        assertEquals(0, new BigDecimal("100").compareTo(src.getBalance()));
+        assertEquals(0, new BigDecimal("500").compareTo(dst.getBalance()));
+    }
+
+    @Test
+    void executePendingTransfers_missingSource_fails() {
+        when(transactionStatusRepository.findByStatusName("PENDING"))
+                .thenReturn(Optional.of(new TransactionStatus(1, "PENDING")));
+        when(transactionStatusRepository.findByStatusName("FAILED"))
+                .thenReturn(Optional.of(new TransactionStatus(3, "FAILED")));
+
+        Account src = createAccount(1L, "IT1", new BigDecimal("1000"), AccountStatus.ACTIVE, 10L);
+        Account dst = createAccount(2L, "IT2", new BigDecimal("500"), AccountStatus.ACTIVE, 20L);
+
+        Transaction tx = new Transaction();
+        tx.setId(50L);
+        tx.setStatusId(1);
+        tx.setAmount(new BigDecimal("100"));
+        tx.setSourceAccount(src);
+        tx.setDestinationAccount(dst);
+        tx.setDescription("Bonifico Programmato");
+
+        when(transactionRepository.findByStatusIdAndScheduledDateLessThanEqual(eq(1), any()))
+                .thenReturn(List.of(tx));
+        when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.empty());
+
+        transactionService.executePendingTransfers();
+
+        assertEquals(3, tx.getStatusId());
+        assertTrue(tx.getDescription().contains("Source account not found"));
+    }
+
+    @Test
+    void withdraw_usesPessimisticLock() {
+        when(transactionTypeRepository.findByTypeName("WITHDRAWAL"))
+                .thenReturn(Optional.of(new TransactionType(2, "WITHDRAWAL")));
+        when(transactionStatusRepository.findByStatusName("COMPLETED"))
+                .thenReturn(Optional.of(new TransactionStatus(2, "COMPLETED")));
+
+        Account acc = createAccount(1L, "IT1", new BigDecimal("1000"), AccountStatus.ACTIVE, 10L);
+        var request = new com.javaisland.bank_backend.transaction.dto.TransactionRequestDto();
+        request.setAccountNumber("IT1");
+        request.setAmount(new BigDecimal("50"));
+        request.setPin("1234");
+
+        when(accountRepository.findByAccountNumberForUpdate("IT1")).thenReturn(Optional.of(acc));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        transactionService.withdraw(10L, request);
+
+        verify(accountRepository).findByAccountNumberForUpdate("IT1");
     }
 }

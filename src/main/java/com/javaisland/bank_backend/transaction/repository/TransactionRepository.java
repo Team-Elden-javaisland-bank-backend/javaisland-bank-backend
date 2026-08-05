@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -33,6 +34,17 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
 
     List<Transaction> findByStatusIdAndScheduledDateLessThanEqual(Integer statusId, OffsetDateTime scheduledDate);
 
+    List<Transaction> findByStatusId(Integer statusId);
+
+    @Modifying
+    @Query("DELETE FROM Transaction t WHERE t.sourceAccount.id IN :accountIds OR t.destinationAccount.id IN :accountIds")
+    void deleteByAccountIds(@Param("accountIds") List<Long> accountIds);    @Query(value = "SELECT t FROM Transaction t " +
+            "WHERE t.statusId = :statusId " +
+            "AND (t.sourceAccount.id IN :accountIds OR t.destinationAccount.id IN :accountIds) " +
+            "ORDER BY t.scheduledDate ASC NULLS LAST")
+    List<Transaction> findScheduledByAccountIds(@Param("statusId") Integer statusId,
+                                                @Param("accountIds") List<Long> accountIds);
+
     List<Transaction> findByTypeIdAndCreatedAtAfter(Integer typeId, OffsetDateTime since, Pageable pageable);
 
     List<Transaction> findByCreatedAtAfter(OffsetDateTime since, Pageable pageable);
@@ -45,6 +57,15 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
                                          @Param("statusId") Integer statusId,
                                          @Param("start") OffsetDateTime start,
                                          @Param("end") OffsetDateTime end);
+
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
+           "WHERE t.sourceAccount.id = :accountId " +
+           "AND t.statusId = :statusId " +
+           "AND t.createdAt BETWEEN :start AND :end")
+    BigDecimal sumOutflowByAccountBetween(@Param("accountId") Long accountId,
+                                          @Param("statusId") Integer statusId,
+                                          @Param("start") OffsetDateTime start,
+                                          @Param("end") OffsetDateTime end);
 
     @Query("SELECT COUNT(t) FROM Transaction t " +
            "WHERE (t.sourceAccount.id = :accountId OR t.destinationAccount.id = :accountId) " +

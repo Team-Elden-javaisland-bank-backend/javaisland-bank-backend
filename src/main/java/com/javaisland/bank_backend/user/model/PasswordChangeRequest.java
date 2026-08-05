@@ -32,6 +32,9 @@ public class PasswordChangeRequest {
     @Column(name = "processed_at")
     private OffsetDateTime processedAt;
 
+    @Column(name = "new_password_encrypted", length = 500)
+    private String newPasswordEncrypted;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {

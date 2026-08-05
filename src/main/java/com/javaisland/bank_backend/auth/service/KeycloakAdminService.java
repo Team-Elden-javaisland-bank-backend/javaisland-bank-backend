@@ -88,7 +88,7 @@ public class KeycloakAdminService {
         var response = restTemplate.exchange(tokenUrl, HttpMethod.POST, entity, Map.class);
 
         if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-            throw new ApiBankException("Impossibile autenticarsi come admin Keycloak.", "KEYCLOAK_ADMIN_AUTH_FAILED");
+            throw new ApiBankException("KEYCLOAK_ADMIN_AUTH_FAILED", "KEYCLOAK_ADMIN_AUTH_FAILED");
         }
 
         @SuppressWarnings("unchecked")
@@ -134,11 +134,10 @@ public class KeycloakAdminService {
 
         } catch (HttpClientErrorException e) {
             if (e.getStatusCode() == HttpStatus.CONFLICT) {
-                throw new ApiBankException(
-                        "Utente già registrato su Keycloak con questa email.", "KEYCLOAK_USER_EXISTS");
+                throw new ApiBankException("KEYCLOAK_USER_EXISTS", "KEYCLOAK_USER_EXISTS");
             }
             log.error("Keycloak create user failed: status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
-            throw new ApiBankException("Creazione utente Keycloak fallita.", "KEYCLOAK_USER_CREATION_FAILED");
+            throw new ApiBankException("KEYCLOAK_USER_CREATION_FAILED", "KEYCLOAK_USER_CREATION_FAILED");
         }
     }
 
@@ -225,7 +224,7 @@ public class KeycloakAdminService {
             log.info("Keycloak password reset for user {}", keycloakId);
         } catch (HttpClientErrorException e) {
             log.error("Failed to reset Keycloak password for {}: status={}", keycloakId, e.getStatusCode());
-            throw new ApiBankException("Reset password Keycloak fallito.", "KEYCLOAK_PASSWORD_RESET_FAILED");
+            throw new ApiBankException("KEYCLOAK_PASSWORD_RESET_FAILED", "KEYCLOAK_PASSWORD_RESET_FAILED");
         }
     }
 

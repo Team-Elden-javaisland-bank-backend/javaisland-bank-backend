@@ -1,5 +1,6 @@
 package com.javaisland.bank_backend.beneficiary.service;
 
+import com.javaisland.bank_backend.account.model.Account;
 import com.javaisland.bank_backend.account.model.AccountStatus;
 import com.javaisland.bank_backend.account.repository.AccountRepository;
 import com.javaisland.bank_backend.beneficiary.dto.BeneficiaryRequestDto;
@@ -15,6 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,11 +31,11 @@ public class BeneficiaryService {
     @Transactional
     public BeneficiaryResponseDto save(Long userId, BeneficiaryRequestDto request) {
         if (beneficiaryRepository.existsByUserIdAndDestinationAccountNumber(userId, request.getDestinationAccountNumber())) {
-            throw new ApiBankException("Il beneficiario esiste già.", "DUPLICATE_BENEFICIARY");
+            throw new ApiBankException("DUPLICATE_BENEFICIARY", "DUPLICATE_BENEFICIARY");
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.setUser(user);
@@ -44,14 +47,14 @@ public class BeneficiaryService {
 
         if (!isExternal) {
             var account = accountRepository.findByAccountNumber(request.getDestinationAccountNumber())
-                    .orElseThrow(() -> new ApiBankException("Conto " + request.getDestinationAccountNumber() + " non trovato.", "ACCOUNT_NOT_FOUND"));
+                    .orElseThrow(() -> new ApiBankException("ACCOUNT_NOT_FOUND", "ACCOUNT_NOT_FOUND"));
 
             if (account.getUser().getId().equals(userId)) {
-                throw new ApiBankException("Non puoi aggiungere uno dei tuoi conti come beneficiario.", "SELF_BENEFICIARY_FORBIDDEN");
+                throw new ApiBankException("SELF_BENEFICIARY_FORBIDDEN", "SELF_BENEFICIARY_FORBIDDEN");
             }
 
             if (account.getStatusId() != AccountStatus.ACTIVE) {
-                throw new ApiBankException("Il conto di destinazione non è attivo.", "INVALID_ACCOUNT_STATE");
+                throw new ApiBankException("INVALID_ACCOUNT_STATE", "INVALID_ACCOUNT_STATE");
             }
         }
 
@@ -62,23 +65,29 @@ public class BeneficiaryService {
 
     @Transactional(readOnly = true)
     public List<BeneficiaryResponseDto> listByUserId(Long userId) {
-        return beneficiaryRepository.findByUserId(userId)
+        List<Beneficiary> beneficiaries = beneficiaryRepository.findByUserId(userId);
+        List<String> accountNumbers = beneficiaries.stream()
+                .map(Beneficiary::getDestinationAccountNumber)
+                .toList();
+        Map<String, Account> accountMap = accountRepository.findByAccountNumberIn(accountNumbers)
                 .stream()
-                .map(this::mapToDto)
+                .collect(Collectors.toMap(Account::getAccountNumber, a -> a));
+        return beneficiaries.stream()
+                .map(b -> mapToDto(b, accountMap.get(b.getDestinationAccountNumber())))
                 .toList();
     }
 
     @Transactional
     public void delete(Long userId, Long beneficiaryId) {
         Beneficiary beneficiary = beneficiaryRepository.findByIdAndUserId(beneficiaryId, userId)
-                .orElseThrow(() -> new ApiBankException("Beneficiario non trovato.", "BENEFICIARY_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("BENEFICIARY_NOT_FOUND", "BENEFICIARY_NOT_FOUND"));
         beneficiaryRepository.delete(beneficiary);
         log.info("Deleted beneficiary id={} for user id={}", beneficiaryId, userId);
     }
 
     public String resolveAccountNumber(Long userId, Long beneficiaryId) {
         Beneficiary beneficiary = beneficiaryRepository.findByIdAndUserId(beneficiaryId, userId)
-                .orElseThrow(() -> new ApiBankException("Beneficiario non trovato.", "BENEFICIARY_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("BENEFICIARY_NOT_FOUND", "BENEFICIARY_NOT_FOUND"));
         return beneficiary.getDestinationAccountNumber();
     }
 
@@ -92,12 +101,17 @@ public class BeneficiaryService {
     @Transactional
     public BeneficiaryResponseDto rename(Long userId, Long beneficiaryId, String newNickname) {
         Beneficiary beneficiary = beneficiaryRepository.findByIdAndUserId(beneficiaryId, userId)
-                .orElseThrow(() -> new ApiBankException("Beneficiario non trovato.", "BENEFICIARY_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("BENEFICIARY_NOT_FOUND", "BENEFICIARY_NOT_FOUND"));
         beneficiary.setNickname(newNickname);
         return mapToDto(beneficiaryRepository.save(beneficiary));
     }
 
     private BeneficiaryResponseDto mapToDto(Beneficiary b) {
+        Account account = accountRepository.findByAccountNumber(b.getDestinationAccountNumber()).orElse(null);
+        return mapToDto(b, account);
+    }
+
+    private BeneficiaryResponseDto mapToDto(Beneficiary b, Account account) {
         var builder = BeneficiaryResponseDto.builder()
                 .id(b.getId())
                 .nickname(b.getNickname())
@@ -105,13 +119,12 @@ public class BeneficiaryService {
                 .destinationAccountNumber(b.getDestinationAccountNumber())
                 .createdAt(b.getCreatedAt());
 
-        accountRepository.findByAccountNumber(b.getDestinationAccountNumber())
-                .ifPresent(account -> {
-                    var holder = account.getUser();
-                    builder.holderFirstName(holder.getFirstName())
-                            .holderLastName(holder.getLastName())
-                            .profilePictureUrl(holder.getProfilePictureUrl());
-                });
+        if (account != null) {
+            var holder = account.getUser();
+            builder.holderFirstName(holder.getFirstName())
+                    .holderLastName(holder.getLastName())
+                    .profilePictureUrl(holder.getProfilePictureUrl());
+        }
 
         return builder.build();
     }

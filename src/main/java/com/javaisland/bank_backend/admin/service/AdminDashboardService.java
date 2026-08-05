@@ -28,8 +28,9 @@ public class AdminDashboardService {
         var customerRole = roleTypeRepository.findByRoleName("C").orElse(null);
         var employeeRole = roleTypeRepository.findByRoleName("D").orElse(null);
         var pendingStatus = userStatusRepository.findByUserStatus("PENDING").orElse(null);
+        var activeStatus = userStatusRepository.findByUserStatus("ACTIVE").orElse(null);
 
-        long totalCustomers = customerRole != null ? userRepository.countByRoleType(customerRole) : 0;
+        long totalCustomers = customerRole != null && activeStatus != null ? userRepository.countByRoleTypeAndStatus(customerRole, activeStatus) : 0;
         long totalEmployees = employeeRole != null ? userRepository.countByRoleType(employeeRole) : 0;
         long pendingRegistrations = pendingStatus != null ? userRepository.countByStatus(pendingStatus) : 0;
 

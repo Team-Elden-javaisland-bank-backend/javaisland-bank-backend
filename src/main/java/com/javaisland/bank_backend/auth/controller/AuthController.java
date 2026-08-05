@@ -3,132 +3,100 @@ package com.javaisland.bank_backend.auth.controller;
 import com.javaisland.bank_backend.auth.dto.LoginRequestDto;
 import com.javaisland.bank_backend.auth.dto.LoginResponseDto;
 import com.javaisland.bank_backend.auth.dto.RegisterRequestDto;
-import com.javaisland.bank_backend.auth.service.KeycloakAdminService;
+import com.javaisland.bank_backend.auth.service.AuthService;
 import com.javaisland.bank_backend.auth.service.RegistrationService;
-import com.javaisland.bank_backend.user.model.User;
-import com.javaisland.bank_backend.user.repository.RoleTypeRepository;
-import com.javaisland.bank_backend.user.repository.UserRepository;
-import com.javaisland.bank_backend.user.repository.UserStatusRepository;
 import com.javaisland.bank_backend.user.dto.UserResponseDto;
-import com.javaisland.bank_backend.user.service.UserPinService;
-import com.nimbusds.jwt.SignedJWT;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
+import java.time.Duration;
 
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Authentication", description = "Registration and login endpoints")
 public class AuthController {
 
     private final RegistrationService registrationService;
-    private final UserRepository userRepository;
-    private final UserPinService userPinService;
-    private final KeycloakAdminService keycloakAdminService;
-    private final RoleTypeRepository roleTypeRepository;
-    private final UserStatusRepository userStatusRepository;
+    private final AuthService authService;
+
+    @Value("${app.jwt.cookie-name:bank_token}")
+    private String cookieName;
+
+    @Value("${app.jwt.cookie-secure:false}")
+    private boolean cookieSecure;
 
     @PostMapping("/register")
+    @Operation(summary = "Register a new customer", description = "Creates a new pending customer registration in both bank DB and Keycloak")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Registration created successfully"),
+        @ApiResponse(responseCode = "400", description = "Validation error or duplicate email/username")
+    })
     public ResponseEntity<UserResponseDto> register(@Valid @RequestBody RegisterRequestDto requestDto) {
         return ResponseEntity.ok(registrationService.register(requestDto));
     }
 
     @PostMapping("/keycloak-login")
-    public ResponseEntity<?> keycloakLogin(@Valid @RequestBody LoginRequestDto request) {
-        String username = request.getUsername().toLowerCase();
-        User user = userRepository.findByUsername(username).orElse(null);
-
-        if (user != null) {
-            String userStatus = user.getStatus().getUserStatus();
-            if (!"ACTIVE".equals(userStatus)) {
-                String errorCode = switch (userStatus) {
-                    case "PENDING" -> "ACCOUNT_PENDING";
-                    case "ANNULLED" -> "ACCOUNT_ANNULLED";
-                    case "SUSPENDED" -> "ACCOUNT_SUSPENDED";
-                    default -> "ACCOUNT_UNAVAILABLE";
-                };
-                throw new com.javaisland.bank_backend.exception.ApiBankException(errorCode, errorCode);
-            }
+    @Operation(summary = "Login with Keycloak", description = "Authenticates user via Keycloak and syncs to local DB")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Login successful"),
+        @ApiResponse(responseCode = "401", description = "Invalid credentials")
+    })
+    public ResponseEntity<LoginResponseDto> keycloakLogin(@Valid @RequestBody LoginRequestDto request,
+                                                          HttpServletResponse response) {
+        LoginResponseDto dto = authService.keycloakLogin(request);
+        if (dto.getToken() != null) {
+            setAuthCookie(response, dto.getToken());
         }
-
-        try {
-            Map<String, Object> tokenResponse = keycloakAdminService.tokenLogin(
-                    username, request.getPassword());
-
-            String keycloakToken = (String) tokenResponse.get("access_token");
-
-            String keycloakId;
-            try {
-                keycloakId = SignedJWT.parse(keycloakToken).getJWTClaimsSet().getSubject();
-            } catch (Exception e) {
-                throw new com.javaisland.bank_backend.exception.ApiBankException(
-                        "INVALID_TOKEN", "INVALID_TOKEN");
-            }
-
-            if (user == null) {
-                user = syncKeycloakUserToDb(keycloakId, username);
-            }
-
-            if (user.getKeycloakId() == null || !user.getKeycloakId().equals(keycloakId)) {
-                user.setKeycloakId(keycloakId);
-                userRepository.save(user);
-            }
-
-            return ResponseEntity.ok(LoginResponseDto.builder()
-                    .token(keycloakToken)
-                    .role(user.getRoleType().getRoleName())
-                    .userId(user.getId())
-                    .firstName(user.getFirstName())
-                    .lastName(user.getLastName())
-                    .email(user.getEmail())
-                    .limitsSetupComplete(user.isLimitsSetupComplete())
-                    .pinSetupComplete(userPinService.hasPin(user.getId()))
-                    .profilePictureUrl(user.getProfilePictureUrl())
-                    .build());
-
-        } catch (com.javaisland.bank_backend.exception.ApiBankException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Keycloak login error: {}", e.getMessage());
-            throw new com.javaisland.bank_backend.exception.ApiBankException(
-                    "KEYCLOAK_ERROR", "KEYCLOAK_ERROR");
-        }
+        return ResponseEntity.ok(dto);
     }
 
-    private User syncKeycloakUserToDb(String keycloakId, String username) {
-        var kcUsers = keycloakAdminService.getAllUsers();
-        Map<String, Object> kcUser = kcUsers.stream()
-                .filter(u -> keycloakId.equals(u.get("id")))
-                .findFirst()
-                .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException(
-                        "USER_NOT_FOUND_KEYCLOAK", "USER_NOT_FOUND_KEYCLOAK"));
-
-        String firstName = (String) kcUser.getOrDefault("firstName", "");
-        String lastName = (String) kcUser.getOrDefault("lastName", "");
-        String email = (String) kcUser.getOrDefault("email", username);
-
-        var customerRole = roleTypeRepository.findByRoleName("C")
-                .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException("ROLE_NOT_FOUND", "ROLE_NOT_FOUND"));
-        var activeStatus = userStatusRepository.findByUserStatus("ACTIVE")
-                .orElseThrow(() -> new com.javaisland.bank_backend.exception.ApiBankException("STATUS_NOT_CONFIGURED", "STATUS_NOT_CONFIGURED"));
-
-        User user = new User();
-        user.setKeycloakId(keycloakId);
-        user.setUsername(username);
-        user.setFirstName(firstName);
-        user.setLastName(lastName);
-        user.setEmail(email);
-        user.setRoleType(customerRole);
-        user.setStatus(activeStatus);
-
-        User saved = userRepository.save(user);
-        log.info("Synced Keycloak user to DB: {} (id={}, keycloakId={})", username, saved.getId(), keycloakId);
-        return saved;
+    @GetMapping("/me")
+    @Operation(summary = "Current user", description = "Returns the authenticated user profile (session restore)")
+    public ResponseEntity<LoginResponseDto> me(@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(authService.getUserInfo(jwt));
     }
 
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletResponse response) {
+        clearAuthCookie(response);
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
+    private void setAuthCookie(HttpServletResponse response, String token) {
+        ResponseCookie cookie = ResponseCookie.from(cookieName, token)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(Duration.ofHours(12))
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private void clearAuthCookie(HttpServletResponse response) {
+        ResponseCookie cookie = ResponseCookie.from(cookieName, "")
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(Duration.ZERO)
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
 }

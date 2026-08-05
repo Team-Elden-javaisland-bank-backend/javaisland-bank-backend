@@ -1,5 +1,6 @@
 package com.javaisland.bank_backend.account.service;
 
+import com.javaisland.bank_backend.exception.ApiBankException;
 import org.springframework.stereotype.Component;
 
 import java.security.SecureRandom;
@@ -33,7 +34,7 @@ public class IbanGenerator {
                 return iban;
             }
         }
-        throw new RuntimeException("Failed to generate valid IBAN after " + MAX_GENERATION_ATTEMPTS + " attempts");
+        throw new ApiBankException("IBAN_GENERATION_FAILED", "IBAN_GENERATION_FAILED");
     }
 
     /**

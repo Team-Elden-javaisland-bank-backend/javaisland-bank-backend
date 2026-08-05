@@ -21,6 +21,7 @@ import com.javaisland.bank_backend.transaction.repository.TransactionStatusRepos
 import com.javaisland.bank_backend.transaction.repository.TransactionTypeRepository;
 import com.javaisland.bank_backend.user.model.User;
 import com.javaisland.bank_backend.user.repository.UserRepository;
+import com.javaisland.bank_backend.user.service.UserPinService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -55,14 +56,15 @@ public class TransactionService {
     private final AccountLimitService accountLimitService;
     private final NotificationService notificationService;
     private final SecurityUtil securityUtil;
+    private final UserPinService userPinService;
 
     @Transactional
     public Transaction transferFunds(Account source, Account destination, BigDecimal amount, String typeName, String statusName, String description) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ApiBankException("L'importo deve essere maggiore di zero.", "INVALID_AMOUNT");
+            throw new ApiBankException("INVALID_AMOUNT", "INVALID_AMOUNT");
         }
         if (source == null && destination == null) {
-            throw new ApiBankException("Una transazione richiede almeno un conto.", "INVALID_TRANSACTION");
+            throw new ApiBankException("INVALID_TRANSACTION", "INVALID_TRANSACTION");
         }
 
         int typeId = getTypeIdOrThrow(typeName);
@@ -74,13 +76,11 @@ public class TransactionService {
         if (source != null) {
             if (source.getStatusId() != AccountStatus.ACTIVE) {
                 throw new ApiBankException(
-                    "Il conto " + source.getAccountNumber() + " non è attivo. Prelievo non possibile.", "INVALID_ACCOUNT_STATE");
+                    "INVALID_ACCOUNT_STATE", "INVALID_ACCOUNT_STATE");
             }
             if (source.getBalance().compareTo(amount) < 0) {
                 throw new ApiBankException(
-                    "Fondi insufficienti sul conto " + source.getAccountNumber()
-                    + ". Disponibili: €" + source.getBalance() + ", richiesti: €" + amount + ".",
-                    "INSUFFICIENT_FUNDS");
+                    "INSUFFICIENT_FUNDS", "INSUFFICIENT_FUNDS");
             }
             source.setBalance(source.getBalance().subtract(amount));
             sourceBalanceAfter = source.getBalance();
@@ -88,7 +88,7 @@ public class TransactionService {
 
         if (destination != null) {
             if (destination.getStatusId() != AccountStatus.ACTIVE) {
-                throw new ApiBankException("Il conto " + destination.getAccountNumber() + " non è attivo.", "INVALID_ACCOUNT_STATE");
+                throw new ApiBankException("INVALID_ACCOUNT_STATE", "INVALID_ACCOUNT_STATE");
             }
             destination.setBalance(destination.getBalance().add(amount));
             destBalanceAfter = destination.getBalance();
@@ -112,8 +112,8 @@ public class TransactionService {
             accountRepository.save(destination);
         }
 
-        if (destination != null && source != null) {
-            notificationService.send(destination.getUser().getId(), "TRANSFER", "Ricevuto bonifico di €" + amount + " da " + source.getAccountNumber() + ".", "NOTIF_TRANSFER_RECEIVED", "[\"" + amount + "\", \"" + source.getAccountNumber() + "\"]");
+        if (destination != null && source != null && destination.getUser() != null && source.getUser() != null) {
+            notificationService.send(destination.getUser().getId(), "TRANSFER", "Transfer of €" + amount + " received from " + source.getAccountNumber() + ".", "NOTIF_TRANSFER_RECEIVED", "[\"" + amount + "\", \"" + source.getAccountNumber() + "\"]");
         }
 
         log.info("Transaction #{} type={} amount={} source={} dest={}",
@@ -125,73 +125,95 @@ public class TransactionService {
     }
 
     @Transactional
-    public void deposit(Long userId, TransactionRequestDto request) {
-        Account account = getAccountOrThrow(request.getAccountNumber());
+    public TransactionResponseDto deposit(Long userId, TransactionRequestDto request) {
+        Account account = getAccountOrThrowForUpdate(request.getAccountNumber());
         assertOwnership(userId, account);
-        transferFunds(null, account, request.getAmount(), "DEPOSIT", "COMPLETED", "Deposito");
-        notificationService.send(userId, "DEPOSIT", "Deposito di €" + request.getAmount() + " sul conto " + request.getAccountNumber() + " completato.", "NOTIF_DEPOSIT_COMPLETED", "[\"" + request.getAmount() + "\", \"" + request.getAccountNumber() + "\"]");
+        Transaction tx = transferFunds(null, account, request.getAmount(), "DEPOSIT", "COMPLETED", "Deposito");
+        notificationService.send(userId, "DEPOSIT", "Deposit of €" + request.getAmount() + " to account " + request.getAccountNumber() + " completed.", "NOTIF_DEPOSIT_COMPLETED", "[\"" + request.getAmount() + "\", \"" + request.getAccountNumber() + "\"]");
+        return mapToResponseDto(tx);
     }
 
     private static final BigDecimal MIN_WITHDRAWAL = new BigDecimal("10");
+    private static final BigDecimal ATM_MULTIPLE = new BigDecimal("10");
 
     @Transactional
-    public void withdraw(Long userId, TransactionRequestDto request) {
+    public TransactionResponseDto withdraw(Long userId, TransactionRequestDto request) {
         BigDecimal amount = request.getAmount();
+
+        requireValidPin(userId, request.getPin());
 
         if (amount.compareTo(MIN_WITHDRAWAL) < 0) {
             throw new ApiBankException(
-                "L'importo del prelievo €" + amount + " è inferiore al minimo di €" + MIN_WITHDRAWAL + ".",
-                "MINIMUM_WITHDRAWAL");
+                "MINIMUM_WITHDRAWAL", "MINIMUM_WITHDRAWAL");
         }
 
-        Account account = getAccountOrThrow(request.getAccountNumber());
+        if (amount.remainder(ATM_MULTIPLE).compareTo(BigDecimal.ZERO) != 0) {
+            throw new ApiBankException(
+                "INVALID_ATM_AMOUNT", "INVALID_ATM_AMOUNT");
+        }
+
+        Account account = getAccountOrThrowForUpdate(request.getAccountNumber());
         assertOwnership(userId, account);
         accountLimitService.validateWithdrawal(account, amount);
-        transferFunds(account, null, amount, "WITHDRAWAL", "COMPLETED", "Prelievo");
-        notificationService.send(userId, "WITHDRAWAL", "Prelievo di €" + amount + " dal conto " + request.getAccountNumber() + " completato.", "NOTIF_WITHDRAWAL_COMPLETED", "[\"" + amount + "\", \"" + request.getAccountNumber() + "\"]");
+        Transaction tx = transferFunds(account, null, amount, "WITHDRAWAL", "COMPLETED", "Prelievo");
+        notificationService.send(userId, "WITHDRAWAL", "Withdrawal of €" + amount + " from account " + request.getAccountNumber() + " completed.", "NOTIF_WITHDRAWAL_COMPLETED", "[\"" + amount + "\", \"" + request.getAccountNumber() + "\"]");
+        return mapToResponseDto(tx);
     }
 
     @Transactional
     public TransactionResponseDto transfer(Long userId, TransferRequestDto request) {
-        if (request.getAmount().compareTo(new BigDecimal("1")) < 0) {
-            throw new ApiBankException("L'importo minimo per il bonifico è €1,00.", "MINIMUM_TRANSFER");
-        }
+        requireValidPin(userId, request.getPin());
         String destAccountNumber = request.getDestinationAccountNumber();
         if (request.getBeneficiaryId() != null) {
             destAccountNumber = beneficiaryService.resolveAccountNumber(userId, request.getBeneficiaryId());
         }
         if (destAccountNumber == null || destAccountNumber.isBlank()) {
-            throw new ApiBankException("Il conto di destinazione o il beneficiario è obbligatorio.", "INVALID_TRANSFER");
+            throw new ApiBankException("INVALID_TRANSFER", "INVALID_TRANSFER");
         }
         if (request.getSourceAccountNumber().equals(destAccountNumber)) {
-            throw new ApiBankException("I conti sorgente e destinazione devono essere diversi.", "INVALID_TRANSFER");
+            throw new ApiBankException("INVALID_TRANSFER", "INVALID_TRANSFER");
         }
-        Account source = getAccountOrThrow(request.getSourceAccountNumber());
+        String sourceNumber = request.getSourceAccountNumber();
+        String destNumber = destAccountNumber;
+
+        String lockFirst = sourceNumber.compareTo(destNumber) <= 0 ? sourceNumber : destNumber;
+        String lockSecond = sourceNumber.compareTo(destNumber) <= 0 ? destNumber : sourceNumber;
+
+        Account firstLocked = getAccountOrThrowForUpdate(lockFirst);
+        Account secondLocked = getAccountOrThrowForUpdate(lockSecond);
+
+        Account source = sourceNumber.equals(lockFirst) ? firstLocked : secondLocked;
+        Account destination = sourceNumber.equals(lockFirst) ? secondLocked : firstLocked;
+
         assertOwnership(userId, source);
-        Account destination = getAccountOrThrow(destAccountNumber);
 
         boolean isSameUser = source.getUser().getId().equals(destination.getUser().getId());
         boolean isInstant = isSameUser || Boolean.TRUE.equals(request.getIsInstant());
-        accountLimitService.validateTransfer(source, request.getAmount(), isInstant);
+        if (!isSameUser && request.getAmount().compareTo(new BigDecimal("1")) < 0) {
+            throw new ApiBankException("MINIMUM_TRANSFER", "MINIMUM_TRANSFER");
+        }
+        if (!isSameUser) {
+            accountLimitService.validateTransfer(source, request.getAmount(), isInstant);
+        }
 
         String typeName = isInstant ? "INSTANT_TRANSFER" : "TRANSFER";
         String description = request.getDescription() != null ? request.getDescription() : (isInstant ? "Bonifico Istantaneo" : "Bonifico Programmato");
 
         if (isInstant) {
             Transaction tx = transferFunds(source, destination, request.getAmount(), typeName, "COMPLETED", description);
-            notificationService.send(userId, "TRANSFER", "Bonifico di €" + request.getAmount() + " a " + destination.getAccountNumber() + " completato.", "NOTIF_TRANSFER_COMPLETED", "[\"" + request.getAmount() + "\", \"" + destination.getAccountNumber() + "\"]");
+            notificationService.send(userId, "TRANSFER", "Transfer of €" + request.getAmount() + " to " + destination.getAccountNumber() + " completed.", "NOTIF_TRANSFER_COMPLETED", "[\"" + request.getAmount() + "\", \"" + destination.getAccountNumber() + "\"]");
             return mapToResponseDto(tx);
         }
 
         LocalDate scheduledDate = request.getScheduledDate();
         if (scheduledDate == null) {
-            throw new ApiBankException("La data programmata è obbligatoria per i bonifici normali.", "MISSING_SCHEDULED_DATE");
+            throw new ApiBankException("MISSING_SCHEDULED_DATE", "MISSING_SCHEDULED_DATE");
         }
         if (!scheduledDate.isAfter(LocalDate.now())) {
-            throw new ApiBankException("La data programmata deve essere almeno domani.", "INVALID_SCHEDULED_DATE");
+            throw new ApiBankException("INVALID_SCHEDULED_DATE", "INVALID_SCHEDULED_DATE");
         }
         if (ChronoUnit.DAYS.between(LocalDate.now(), scheduledDate) > MAX_SCHEDULE_DAYS) {
-            throw new ApiBankException("La data programmata non può essere più di " + MAX_SCHEDULE_DAYS + " giorni da oggi.", "SCHEDULE_TOO_FAR");
+            throw new ApiBankException("SCHEDULE_TOO_FAR", "SCHEDULE_TOO_FAR");
         }
 
         int typeId = getTypeIdOrThrow(typeName);
@@ -207,7 +229,7 @@ public class TransactionService {
         tx.setScheduledDate(scheduledDate.atStartOfDay(ZoneId.of("Europe/Rome")).toOffsetDateTime());
         Transaction saved = transactionRepository.save(tx);
 
-        notificationService.send(userId, "SCHEDULED_TRANSFER", "Bonifico programmato di €" + request.getAmount() + " a " + destination.getAccountNumber() + " per il " + scheduledDate + ".", "NOTIF_SCHEDULED_TRANSFER_CREATED", "[\"" + request.getAmount() + "\", \"" + destination.getAccountNumber() + "\", \"" + scheduledDate + "\"]");
+        notificationService.send(userId, "SCHEDULED_TRANSFER", "Scheduled transfer of €" + request.getAmount() + " to " + destination.getAccountNumber() + " for " + scheduledDate + ".", "NOTIF_SCHEDULED_TRANSFER_CREATED", "[\"" + request.getAmount() + "\", \"" + destination.getAccountNumber() + "\", \"" + scheduledDate + "\"]");
 
         log.info("Scheduled transaction #{} type={} amount={} source={} dest={} scheduledDate={}",
                 saved.getId(), typeName, request.getAmount(),
@@ -231,23 +253,30 @@ public class TransactionService {
 
     @Transactional(readOnly = true)
     public PageResponseDto<TransactionResponseDto> getAllAccountsTransactions(
-            Long userId, OffsetDateTime start, OffsetDateTime end, int page, int size) {
+            Long userId, OffsetDateTime start, OffsetDateTime end, int page, int size,
+            String accountNumber) {
 
         if (end.isBefore(start)) {
-            throw new ApiBankException("La data di fine non può essere precedente alla data di inizio.", "INVALID_DATE_RANGE");
+            throw new ApiBankException("INVALID_DATE_RANGE", "INVALID_DATE_RANGE");
         }
         if (ChronoUnit.DAYS.between(start, end) > MAX_SEARCH_SPAN_DAYS) {
-            throw new ApiBankException("L'intervallo di ricerca supera i " + MAX_SEARCH_SPAN_DAYS + " giorni.", "SEARCH_RANGE_TOO_WIDE");
+            throw new ApiBankException("SEARCH_RANGE_TOO_WIDE", "SEARCH_RANGE_TOO_WIDE");
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiBankException("Utente non trovato.", "USER_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
 
         List<Account> accounts = accountRepository.findByUserId(user.getId());
         if (accounts.isEmpty()) {
             return PageResponseDto.from(Page.empty());
         }
         List<Long> accountIds = accounts.stream().map(Account::getId).toList();
+
+        if (accountNumber != null && !accountNumber.isBlank()) {
+            Account account = getAccountOrThrow(accountNumber);
+            assertOwnership(userId, account);
+            accountIds = List.of(account.getId());
+        }
 
         Specification<Transaction> spec = TransactionSpecifications.forAccountIds(accountIds)
                 .and(TransactionSpecifications.createdBetween(start, end));
@@ -266,31 +295,63 @@ public class TransactionService {
 
         for (Transaction tx : pendingTransactions) {
             try {
-                Account source = tx.getSourceAccount();
-                Account destination = tx.getDestinationAccount();
+                Long srcId = tx.getSourceAccount() != null ? tx.getSourceAccount().getId() : null;
+                Long dstId = tx.getDestinationAccount() != null ? tx.getDestinationAccount().getId() : null;
+
+                Account source = null;
+                Account destination = null;
+
+                if (srcId != null && dstId != null && !srcId.equals(dstId)) {
+                    long lockLo = Math.min(srcId, dstId);
+                    long lockHi = Math.max(srcId, dstId);
+                    Account lo = accountRepository.findByIdForUpdate(lockLo).orElse(null);
+                    Account hi = accountRepository.findByIdForUpdate(lockHi).orElse(null);
+                    source = srcId == lockLo ? lo : hi;
+                    destination = srcId == lockLo ? hi : lo;
+                } else if (srcId != null && dstId != null) {
+                    source = destination = accountRepository.findByIdForUpdate(srcId).orElse(null);
+                } else if (srcId != null) {
+                    source = accountRepository.findByIdForUpdate(srcId).orElse(null);
+                } else if (dstId != null) {
+                    destination = accountRepository.findByIdForUpdate(dstId).orElse(null);
+                }
+
+                if (srcId != null && source == null) {
+                    failTransaction(tx, "Source account not found");
+                    continue;
+                }
+
+                if (dstId != null && destination == null) {
+                    failTransaction(tx, "Destination account not found");
+                    continue;
+                }
 
                 if (source != null && source.getStatusId() != AccountStatus.ACTIVE) {
-                    tx.setStatusId(getStatusIdOrThrow("FAILED"));
-                    tx.setDescription(tx.getDescription() + " - Conto sorgente non attivo");
-                    transactionRepository.save(tx);
-                    log.warn("Scheduled transfer #{} failed: source account not active", tx.getId());
+                    failTransaction(tx, "Source account not active");
                     continue;
                 }
 
                 if (destination != null && destination.getStatusId() != AccountStatus.ACTIVE) {
-                    tx.setStatusId(getStatusIdOrThrow("FAILED"));
-                    tx.setDescription(tx.getDescription() + " - Conto destinazione non attivo");
-                    transactionRepository.save(tx);
-                    log.warn("Scheduled transfer #{} failed: destination account not active", tx.getId());
+                    failTransaction(tx, "Destination account not active");
                     continue;
                 }
 
                 if (source != null && source.getBalance().compareTo(tx.getAmount()) < 0) {
-                    tx.setStatusId(getStatusIdOrThrow("FAILED"));
-                    tx.setDescription(tx.getDescription() + " - Fondi insufficienti");
-                    transactionRepository.save(tx);
-                    log.warn("Scheduled transfer #{} failed: insufficient funds", tx.getId());
+                    failTransaction(tx, "Insufficient funds");
                     continue;
+                }
+
+                if (source != null && destination != null) {
+                    boolean sameUser = source.getUser() != null && destination.getUser() != null
+                            && source.getUser().getId().equals(destination.getUser().getId());
+                    if (!sameUser) {
+                        try {
+                            accountLimitService.validateTransfer(source, tx.getAmount(), false);
+                        } catch (ApiBankException e) {
+                            failTransaction(tx, "Limit exceeded");
+                            continue;
+                        }
+                    }
                 }
 
                 if (source != null) {
@@ -308,31 +369,61 @@ public class TransactionService {
                 tx.setStatusId(getStatusIdOrThrow("COMPLETED"));
                 transactionRepository.save(tx);
 
-                if (source != null) {
-                    notificationService.send(source.getUser().getId(), "TRANSFER", "Bonifico programmato di €" + tx.getAmount() + " eseguito verso " + destination.getAccountNumber() + ".", "NOTIF_SCHEDULED_TRANSFER_EXECUTED", "[\"" + tx.getAmount() + "\", \"" + destination.getAccountNumber() + "\"]");
+                if (source != null && source.getUser() != null) {
+                    String destNum = destination != null ? destination.getAccountNumber() : "-";
+                    notificationService.send(source.getUser().getId(), "TRANSFER", "Scheduled transfer of €" + tx.getAmount() + " executed to " + destNum + ".", "NOTIF_SCHEDULED_TRANSFER_EXECUTED", "[\"" + tx.getAmount() + "\", \"" + destNum + "\"]");
                 }
-                if (destination != null) {
-                    notificationService.send(destination.getUser().getId(), "TRANSFER", "Ricevuto bonifico di €" + tx.getAmount() + " da " + source.getAccountNumber() + ".", "NOTIF_TRANSFER_RECEIVED", "[\"" + tx.getAmount() + "\", \"" + source.getAccountNumber() + "\"]");
+                if (destination != null && destination.getUser() != null) {
+                    String srcNum = source != null ? source.getAccountNumber() : "-";
+                    notificationService.send(destination.getUser().getId(), "TRANSFER", "Transfer of €" + tx.getAmount() + " received from " + srcNum + ".", "NOTIF_TRANSFER_RECEIVED", "[\"" + tx.getAmount() + "\", \"" + srcNum + "\"]");
                 }
 
                 log.info("Scheduled transfer #{} executed successfully", tx.getId());
             } catch (Exception e) {
                 log.error("Error executing scheduled transfer #{}: {}", tx.getId(), e.getMessage());
-                tx.setStatusId(getStatusIdOrThrow("FAILED"));
-                tx.setDescription(tx.getDescription() + " - Errore di esecuzione: " + e.getMessage());
-                transactionRepository.save(tx);
+                failTransaction(tx, "Execution error: " + e.getMessage());
             }
         }
+    }
+
+    private void requireValidPin(Long userId, String pin) {
+        if (pin == null || pin.isBlank() || !userPinService.verifyPin(userId, pin)) {
+            throw new ApiBankException("INVALID_PIN", "INVALID_PIN");
+        }
+    }
+
+    private void failTransaction(Transaction tx, String reason) {
+        tx.setStatusId(getStatusIdOrThrow("FAILED"));
+        tx.setDescription(tx.getDescription() + " - " + reason);
+        transactionRepository.save(tx);
+        log.warn("Scheduled transfer #{} failed: {}", tx.getId(), reason);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransactionResponseDto> getScheduledTransfers(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiBankException("USER_NOT_FOUND", "USER_NOT_FOUND"));
+
+        List<Account> accounts = accountRepository.findByUserId(user.getId());
+        if (accounts.isEmpty()) {
+            return List.of();
+        }
+        List<Long> accountIds = accounts.stream().map(Account::getId).toList();
+        int scheduledStatusId = getStatusIdOrThrow("PENDING");
+
+        return transactionRepository.findScheduledByAccountIds(scheduledStatusId, accountIds).stream()
+                .map(this::mapToResponseDto)
+                .toList();
     }
 
     @Transactional
     public void cancelPendingTransaction(Long userId, Long transactionId) {
         Transaction tx = transactionRepository.findById(transactionId)
-                .orElseThrow(() -> new ApiBankException("Transazione non trovata.", "TRANSACTION_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("TRANSACTION_NOT_FOUND", "TRANSACTION_NOT_FOUND"));
 
         int pendingStatusId = getStatusIdOrThrow("PENDING");
         if (tx.getStatusId() != pendingStatusId) {
-            throw new ApiBankException("Solo le transazioni in sospeso possono essere annullate.", "INVALID_TRANSACTION_STATE");
+            throw new ApiBankException("INVALID_TRANSACTION_STATE", "INVALID_TRANSACTION_STATE");
         }
 
         if (tx.getSourceAccount() != null) {
@@ -340,10 +431,10 @@ public class TransactionService {
         }
 
         tx.setStatusId(getStatusIdOrThrow("CANCELLED"));
-        tx.setDescription(tx.getDescription() + " - Annullato dall'utente");
+        tx.setDescription(tx.getDescription() + " - TRANSACTION_CANCELLED_BY_USER");
         transactionRepository.save(tx);
 
-        notificationService.send(userId, "TRANSFER", "Transazione #" + transactionId + " annullata.", "NOTIF_TRANSACTION_CANCELLED", "[\"" + transactionId + "\"]");
+        notificationService.send(userId, "TRANSFER", "Transaction #" + transactionId + " cancelled.", "NOTIF_TRANSACTION_CANCELLED", "[\"" + transactionId + "\"]");
 
         log.info("Transaction #{} cancelled by user", transactionId);
     }
@@ -351,13 +442,13 @@ public class TransactionService {
     private int getTypeIdOrThrow(String typeName) {
         return transactionTypeRepository.findByTypeName(typeName)
                 .map(TransactionType::getId)
-                .orElseThrow(() -> new ApiBankException("Tipo transazione '" + typeName + "' non trovato.", "TRANSACTION_TYPE_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("TRANSACTION_TYPE_NOT_FOUND", "TRANSACTION_TYPE_NOT_FOUND"));
     }
 
     private int getStatusIdOrThrow(String statusName) {
         return transactionStatusRepository.findByStatusName(statusName)
                 .map(TransactionStatus::getId)
-                .orElseThrow(() -> new ApiBankException("Stato transazione '" + statusName + "' non trovato.", "TRANSACTION_STATUS_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("TRANSACTION_STATUS_NOT_FOUND", "TRANSACTION_STATUS_NOT_FOUND"));
     }
 
     private void assertOwnership(Long userId, Account account) {
@@ -366,7 +457,12 @@ public class TransactionService {
 
     private Account getAccountOrThrow(String accountNumber) {
         return accountRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new ApiBankException("Conto " + accountNumber + " non trovato.", "ACCOUNT_NOT_FOUND"));
+                .orElseThrow(() -> new ApiBankException("ACCOUNT_NOT_FOUND", "ACCOUNT_NOT_FOUND"));
+    }
+
+    private Account getAccountOrThrowForUpdate(String accountNumber) {
+        return accountRepository.findByAccountNumberForUpdate(accountNumber)
+                .orElseThrow(() -> new ApiBankException("ACCOUNT_NOT_FOUND", "ACCOUNT_NOT_FOUND"));
     }
 
     private TransactionResponseDto mapToResponseDto(Transaction tx) {
